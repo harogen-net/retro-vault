@@ -162,6 +162,23 @@ ion-toolbar {
   --color: var(--ink-main);
 }
 
+.album-menu-popover::part(content) {
+  width: 190px;
+  background: #ffffff;
+  border-radius: 12px;
+  transform-origin: top right;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.album-menu-list {
+  --background: #ffffff;
+  padding: 4px 0;
+}
+
+.album-menu-list ion-item {
+  --background: #ffffff;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

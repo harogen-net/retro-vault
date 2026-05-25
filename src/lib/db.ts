@@ -96,6 +96,28 @@ export const createAlbum = async (title: string): Promise<Album> => {
   return album
 }
 
+export const renameAlbumTitle = async (albumId: string, title: string): Promise<Album> => {
+  const db = await getDb()
+  const tx = db.transaction(ALBUM_STORE, 'readwrite')
+  const store = tx.objectStore(ALBUM_STORE)
+
+  const album = (await toPromise(store.get(albumId))) as Album | undefined
+  if (!album) {
+    tx.abort()
+    throw new Error('アルバムが見つかりません。')
+  }
+
+  const updatedAlbum: Album = {
+    ...album,
+    title,
+    updatedAt: Date.now(),
+  }
+
+  store.put(updatedAlbum)
+  await completeTx(tx)
+  return updatedAlbum
+}
+
 export const listPhotosByAlbum = async (albumId: string): Promise<Photo[]> => {
   const db = await getDb()
   const tx = db.transaction(PHOTO_STORE, 'readonly')

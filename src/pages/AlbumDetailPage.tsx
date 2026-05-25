@@ -3,19 +3,26 @@ import {
 	IonButtons,
 	IonCol,
 	IonContent,
+	IonFab,
+	IonFabButton,
 	IonGrid,
 	IonHeader,
+	IonIcon,
+	IonItem,
+	IonList,
 	IonPage,
+	IonPopover,
 	IonRow,
 	IonText,
 	IonTitle,
 	IonToolbar,
 	useIonRouter,
 } from '@ionic/react'
+import { add, ellipsisHorizontal } from 'ionicons/icons'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { JPEG_QUALITY, MAX_IMAGE_EDGE } from '../config/constants'
-import { addPhotoToAlbum, getAlbum, listPhotosByAlbum } from '../lib/db'
+import { addPhotoToAlbum, getAlbum, listPhotosByAlbum, renameAlbumTitle } from '../lib/db'
 import { formatDateTime } from '../lib/format'
 import { resizeImageToJpeg } from '../lib/image'
 import type { Album, Photo } from '../types'
@@ -29,6 +36,7 @@ export const AlbumDetailPage = () => {
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const router = useIonRouter()
+  const menuTriggerId = 'album-detail-menu-trigger'
 
   useEffect(() => {
     let cancelled = false
@@ -90,6 +98,28 @@ export const AlbumDetailPage = () => {
 
   const onAddPhotoClick = () => {
     fileInputRef.current?.click()
+  }
+
+  const onRenameAlbum = async () => {
+    if (!album) {
+      return
+    }
+
+    const title = window.prompt('アルバム名を入力してください', album.title)?.trim()
+    if (!title || title === album.title) {
+      return
+    }
+
+    try {
+      setBusy(true)
+      setError(null)
+      const updatedAlbum = await renameAlbumTitle(album.id, title)
+      setAlbum(updatedAlbum)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'アルバム名の変更に失敗しました。')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const onAddPhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,8 +201,8 @@ export const AlbumDetailPage = () => {
           </IonButtons>
           <IonTitle>{album.title}</IonTitle>
           <IonButtons slot="end">
-            <IonButton onClick={onAddPhotoClick} disabled={busy}>
-              {busy ? '追加中...' : '画像を追加'}
+            <IonButton id={menuTriggerId} fill="clear" disabled={busy}>
+              <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
             </IonButton>
           </IonButtons>
         </IonToolbar>
@@ -211,6 +241,28 @@ export const AlbumDetailPage = () => {
             </IonGrid>
           )}
         </section>
+
+        <IonFab slot="fixed" vertical="bottom" horizontal="end">
+          <IonFabButton onClick={onAddPhotoClick} disabled={busy} aria-label="画像を追加">
+            {busy ? '...' : <IonIcon icon={add} />}
+          </IonFabButton>
+        </IonFab>
+
+        <IonPopover
+          trigger={menuTriggerId}
+          triggerAction="click"
+          side="bottom"
+          alignment="end"
+          showBackdrop={false}
+          dismissOnSelect
+          className="album-menu-popover"
+        >
+          <IonList className="album-menu-list">
+            <IonItem button onClick={() => void onRenameAlbum()}>
+              アルバム名変更
+            </IonItem>
+          </IonList>
+        </IonPopover>
       </IonContent>
 
       <input

@@ -13,9 +13,10 @@ import {
 	IonTitle,
 	IonToolbar,
 	useIonRouter,
+	useIonViewWillEnter,
 } from '@ionic/react'
 import { add } from 'ionicons/icons'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { JPEG_QUALITY, MAX_IMAGE_EDGE } from '../config/constants'
 import { addPhotoToAlbum, createAlbum, listAlbums } from '../lib/db'
 import { formatDateTime } from '../lib/format'
@@ -47,31 +48,27 @@ export const AlbumsPage = () => {
     return `${albums.length}件のアルバム`
   }, [albums.length])
 
-  useEffect(() => {
-    let cancelled = false
+  const loadAlbums = useCallback(async (showLoading: boolean) => {
+    if (showLoading) {
+      setLoading(true)
+    }
 
-    void listAlbums()
-      .then((data) => {
-        if (!cancelled) {
-          setAlbums(data)
-          setError(null)
-        }
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'アルバム一覧の取得に失敗しました。')
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
+    try {
+      const data = await listAlbums()
+      setAlbums(data)
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'アルバム一覧の取得に失敗しました。')
+    } finally {
+      if (showLoading) {
+        setLoading(false)
+      }
     }
   }, [])
+
+  useIonViewWillEnter(() => {
+    void loadAlbums(true)
+  })
 
   const onFabClick = () => {
     fileInputRef.current?.click()
@@ -98,8 +95,7 @@ export const AlbumsPage = () => {
       const prepared = await resizeImageToJpeg(file, MAX_IMAGE_EDGE, JPEG_QUALITY)
       await addPhotoToAlbum(album.id, prepared)
 
-      const data = await listAlbums()
-      setAlbums(data)
+      await loadAlbums(false)
       router.push(`/albums/${album.id}`, 'forward')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'アルバム作成に失敗しました。')
