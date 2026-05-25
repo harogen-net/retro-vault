@@ -1,10 +1,12 @@
 import {
+	IonActionSheet,
 	IonButton,
 	IonButtons,
 	IonCol,
 	IonContent,
 	IonFab,
 	IonFabButton,
+	IonFooter,
 	IonGrid,
 	IonHeader,
 	IonIcon,
@@ -18,11 +20,19 @@ import {
 	IonToolbar,
 	useIonRouter,
 } from '@ionic/react'
-import { add, ellipsisHorizontal } from 'ionicons/icons'
+import { add, checkmarkCircle, ellipsisHorizontal } from 'ionicons/icons'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { JPEG_QUALITY, MAX_IMAGE_EDGE } from '../config/constants'
-import { addPhotoToAlbum, getAlbum, listPhotosByAlbum, renameAlbumTitle } from '../lib/db'
+import {
+	addPhotoToAlbum,
+	deletePhotosFromAlbum,
+	getAlbum,
+	listAlbums,
+	listPhotosByAlbum,
+	movePhotosToAlbum,
+	renameAlbumTitle,
+} from '../lib/db'
 import { formatDateTime } from '../lib/format'
 import { resizeImageToJpeg } from '../lib/image'
 import type { Album, Photo } from '../types'
@@ -34,9 +44,26 @@ export const AlbumDetailPage = () => {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([])
+  const [albumOptions, setAlbumOptions] = useState<Album[]>([])
+  const [moveSheetOpen, setMoveSheetOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const router = useIonRouter()
   const menuTriggerId = 'album-detail-menu-trigger'
+
+  const fetchAlbumData = async (id: string) => {
+    const [albumData, photoData] = await Promise.all([getAlbum(id), listPhotosByAlbum(id)])
+
+    if (!albumData) {
+      throw new Error('アルバムが見つかりません。')
+    }
+
+    return {
+      albumData,
+      photoData,
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -47,16 +74,9 @@ export const AlbumDetailPage = () => {
       }
     }
 
-    void Promise.all([getAlbum(albumId), listPhotosByAlbum(albumId)])
-      .then(([albumData, photoData]) => {
+    void fetchAlbumData(albumId)
+      .then(({ albumData, photoData }) => {
         if (cancelled) {
-          return
-        }
-
-        if (!albumData) {
-          setError('アルバムが見つかりません。')
-          setAlbum(null)
-          setPhotos([])
           return
         }
 
@@ -135,22 +155,98 @@ export const AlbumDetailPage = () => {
       setError(null)
       const prepared = await resizeImageToJpeg(file, MAX_IMAGE_EDGE, JPEG_QUALITY)
       await addPhotoToAlbum(albumId, prepared)
-      const [albumData, photoData] = await Promise.all([
-        getAlbum(albumId),
-        listPhotosByAlbum(albumId),
-      ])
-
-      if (!albumData) {
-        setError('アルバムが見つかりません。')
-        setAlbum(null)
-        setPhotos([])
-        return
-      }
-
+      const { albumData, photoData } = await fetchAlbumData(albumId)
       setAlbum(albumData)
       setPhotos(photoData)
     } catch (e) {
       setError(e instanceof Error ? e.message : '画像追加に失敗しました。')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const toggleSelectionMode = () => {
+    setSelectionMode((current) => {
+      if (current) {
+        setSelectedPhotoIds([])
+      }
+
+      return !current
+    })
+  }
+
+  const toggleSelectPhoto = (photoId: string) => {
+    setSelectedPhotoIds((current) => {
+      if (current.includes(photoId)) {
+        return current.filter((id) => id !== photoId)
+      }
+
+      return [...current, photoId]
+    })
+  }
+
+  const onDeleteSelected = async () => {
+    if (!album || selectedPhotoIds.length === 0) {
+      return
+    }
+
+    const ok = window.confirm(`選択中の${selectedPhotoIds.length}件を削除しますか？`)
+    if (!ok) {
+      return
+    }
+
+    try {
+      setBusy(true)
+      setError(null)
+      await deletePhotosFromAlbum(album.id, selectedPhotoIds)
+      const { albumData, photoData } = await fetchAlbumData(album.id)
+      setAlbum(albumData)
+      setPhotos(photoData)
+      setSelectedPhotoIds([])
+      setSelectionMode(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '画像削除に失敗しました。')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onOpenMoveSheet = async () => {
+    if (!album || selectedPhotoIds.length === 0) {
+      return
+    }
+
+    try {
+      const allAlbums = await listAlbums()
+      const candidates = allAlbums.filter((item) => item.id !== album.id)
+      if (candidates.length === 0) {
+        setError('移動先のアルバムがありません。')
+        return
+      }
+
+      setAlbumOptions(candidates)
+      setMoveSheetOpen(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '移動先アルバムの取得に失敗しました。')
+    }
+  }
+
+  const onMoveSelected = async (targetAlbumId: string) => {
+    if (!album || selectedPhotoIds.length === 0) {
+      return
+    }
+
+    try {
+      setBusy(true)
+      setError(null)
+      await movePhotosToAlbum(album.id, targetAlbumId, selectedPhotoIds)
+      const { albumData, photoData } = await fetchAlbumData(album.id)
+      setAlbum(albumData)
+      setPhotos(photoData)
+      setSelectedPhotoIds([])
+      setSelectionMode(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '画像移動に失敗しました。')
     } finally {
       setBusy(false)
     }
@@ -227,12 +323,24 @@ export const AlbumDetailPage = () => {
                   <IonCol key={photo.id} size="6" sizeMd="4" sizeLg="3">
                     <button
                       type="button"
-                      className="tile-button"
-                      onClick={() => router.push(`/albums/${album.id}/photos/${photo.id}`, 'forward')}
+                      className={`tile-button ${selectedPhotoIds.includes(photo.id) ? 'is-selected' : ''}`}
+                      onClick={() => {
+                        if (selectionMode) {
+                          toggleSelectPhoto(photo.id)
+                          return
+                        }
+
+                        router.push(`/albums/${album.id}/photos/${photo.id}`, 'forward')
+                      }}
                     >
                       <article className="tile">
                         <img src={photo.src} alt="撮影画像" loading="lazy" decoding="async" />
                         <p>{formatDateTime(photo.createdAt)}</p>
+                        {selectionMode && (
+                          <span className="tile-checkmark" aria-hidden="true">
+                            <IonIcon icon={checkmarkCircle} />
+                          </span>
+                        )}
                       </article>
                     </button>
                   </IonCol>
@@ -261,9 +369,51 @@ export const AlbumDetailPage = () => {
             <IonItem button onClick={() => void onRenameAlbum()}>
               アルバム名変更
             </IonItem>
+            <IonItem button onClick={toggleSelectionMode}>
+              {selectionMode ? '選択モード終了' : '選択モード開始'}
+            </IonItem>
           </IonList>
         </IonPopover>
+
+        <IonActionSheet
+          isOpen={moveSheetOpen}
+          onDidDismiss={() => setMoveSheetOpen(false)}
+          header="移動先アルバムを選択"
+          buttons={[
+            ...albumOptions.map((option) => ({
+              text: option.title,
+              handler: () => {
+                void onMoveSelected(option.id)
+              },
+            })),
+            {
+              text: 'キャンセル',
+              role: 'cancel' as const,
+            },
+          ]}
+        />
       </IonContent>
+
+      {selectionMode && (
+        <IonFooter>
+          <IonToolbar>
+            <div className="selection-actions">
+              <span>{selectedPhotoIds.length}件選択中</span>
+              <div className="selection-actions-buttons">
+                <IonButton fill="clear" onClick={() => void onOpenMoveSheet()} disabled={busy || selectedPhotoIds.length === 0}>
+                  移動
+                </IonButton>
+                <IonButton fill="clear" color="danger" onClick={() => void onDeleteSelected()} disabled={busy || selectedPhotoIds.length === 0}>
+                  削除
+                </IonButton>
+                <IonButton fill="clear" onClick={toggleSelectionMode} disabled={busy}>
+                  完了
+                </IonButton>
+              </div>
+            </div>
+          </IonToolbar>
+        </IonFooter>
+      )}
 
       <input
         ref={fileInputRef}

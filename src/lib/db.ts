@@ -177,3 +177,94 @@ export const addPhotoToAlbum = async (
   await completeTx(tx)
   return photo
 }
+
+export const deletePhotosFromAlbum = async (
+  albumId: string,
+  photoIds: string[],
+): Promise<number> => {
+  if (photoIds.length === 0) {
+    return 0
+  }
+
+  const db = await getDb()
+  const tx = db.transaction([ALBUM_STORE, PHOTO_STORE], 'readwrite')
+  const albumStore = tx.objectStore(ALBUM_STORE)
+  const photoStore = tx.objectStore(PHOTO_STORE)
+
+  const album = (await toPromise(albumStore.get(albumId))) as Album | undefined
+  if (!album) {
+    tx.abort()
+    throw new Error('アルバムが見つかりません。')
+  }
+
+  let deletedCount = 0
+  for (const photoId of photoIds) {
+    const photo = (await toPromise(photoStore.get(photoId))) as Photo | undefined
+    if (!photo || photo.albumId !== albumId) {
+      continue
+    }
+
+    photoStore.delete(photoId)
+    deletedCount += 1
+  }
+
+  albumStore.put({
+    ...album,
+    photoCount: Math.max(0, album.photoCount - deletedCount),
+    updatedAt: Date.now(),
+  })
+
+  await completeTx(tx)
+  return deletedCount
+}
+
+export const movePhotosToAlbum = async (
+  sourceAlbumId: string,
+  targetAlbumId: string,
+  photoIds: string[],
+): Promise<number> => {
+  if (photoIds.length === 0 || sourceAlbumId === targetAlbumId) {
+    return 0
+  }
+
+  const db = await getDb()
+  const tx = db.transaction([ALBUM_STORE, PHOTO_STORE], 'readwrite')
+  const albumStore = tx.objectStore(ALBUM_STORE)
+  const photoStore = tx.objectStore(PHOTO_STORE)
+
+  const sourceAlbum = (await toPromise(albumStore.get(sourceAlbumId))) as Album | undefined
+  const targetAlbum = (await toPromise(albumStore.get(targetAlbumId))) as Album | undefined
+  if (!sourceAlbum || !targetAlbum) {
+    tx.abort()
+    throw new Error('移動先アルバムが見つかりません。')
+  }
+
+  let movedCount = 0
+  for (const photoId of photoIds) {
+    const photo = (await toPromise(photoStore.get(photoId))) as Photo | undefined
+    if (!photo || photo.albumId !== sourceAlbumId) {
+      continue
+    }
+
+    photoStore.put({
+      ...photo,
+      albumId: targetAlbumId,
+    })
+    movedCount += 1
+  }
+
+  const now = Date.now()
+  albumStore.put({
+    ...sourceAlbum,
+    photoCount: Math.max(0, sourceAlbum.photoCount - movedCount),
+    updatedAt: now,
+  })
+  albumStore.put({
+    ...targetAlbum,
+    photoCount: targetAlbum.photoCount + movedCount,
+    updatedAt: now,
+  })
+
+  await completeTx(tx)
+  return movedCount
+}
