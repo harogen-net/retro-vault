@@ -10,7 +10,8 @@ import {
 } from '@ionic/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getAlbum, getPhotoById } from '../lib/db'
+import { useAppModal } from '../components/appModalContext'
+import { getAlbum, getPhotoById, updatePhotoMemo } from '../lib/db'
 import type { Album, Photo } from '../types'
 
 export const PhotoViewPage = () => {
@@ -22,6 +23,8 @@ export const PhotoViewPage = () => {
   const [photo, setPhoto] = useState<Photo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const modal = useAppModal()
 
   useEffect(() => {
     let cancelled = false
@@ -90,6 +93,34 @@ export const PhotoViewPage = () => {
     router.push('/', 'back')
   }
 
+  const onEditMemo = async () => {
+    if (!photo) {
+      return
+    }
+
+    const value = await modal.prompt({
+      title: 'メモ',
+      defaultValue: photo.memo ?? '',
+      placeholder: 'メモを入力...',
+      confirmText: '保存',
+      cancelText: 'キャンセル',
+    })
+
+    if (value === null) {
+      return
+    }
+
+    try {
+      setBusy(true)
+      const updated = await updatePhotoMemo(photo.id, value)
+      setPhoto(updated)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'メモの保存に失敗しました。')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (loading) {
     if (invalidParams) {
       return (
@@ -136,10 +167,15 @@ export const PhotoViewPage = () => {
             </IonButton>
           </IonButtons>
           <IonTitle>{album?.title ?? 'Photo'}</IonTitle>
+          <IonButtons slot="end">
+            <IonButton fill="clear" onClick={() => void onEditMemo()} disabled={busy}>
+              メモ
+            </IonButton>
+          </IonButtons>
         </IonToolbar>
       </IonHeader>
 
-      <IonContent fullscreen className="photo-content">
+      <IonContent fullscreen scrollY={false} className="photo-content">
         <section className="photo-stage">
           <img
             src={photoUrl}
@@ -147,6 +183,12 @@ export const PhotoViewPage = () => {
             className="photo-fullscreen"
             decoding="async"
           />
+          {photo?.memo && (
+            <div className="photo-memo">
+              <p className="photo-memo-text">{photo.memo}</p>
+            </div>
+          )}
+          {error && <p className="error-banner photo-error">{error}</p>}
         </section>
       </IonContent>
     </IonPage>

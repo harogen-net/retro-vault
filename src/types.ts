@@ -15,6 +15,7 @@ export interface Photo {
   sizeBytes: number
   mimeType: string
   blob: Blob
+  memo?: string
 }
 
 export interface PreparedPhoto {

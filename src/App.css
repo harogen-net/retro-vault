@@ -109,6 +109,16 @@
   font-size: 0.78rem;
 }
 
+.tile-memo {
+  margin: 0;
+  padding: 0 0.55rem 0.5rem;
+  color: var(--ink-main);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tile-checkmark {
   position: absolute;
   top: 0.35rem;
@@ -150,8 +160,9 @@
 }
 
 .photo-stage {
-  min-height: 100%;
+  position: relative;
   width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -166,6 +177,33 @@
   max-height: 100%;
   object-fit: contain;
   background: #000;
+}
+
+.photo-memo {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+  padding: 2rem 1rem 0.85rem;
+  pointer-events: none;
+}
+
+.photo-error {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  right: 1rem;
+  margin: 0;
+}
+
+.photo-memo-text {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 ion-fab-button {

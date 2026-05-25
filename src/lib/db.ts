@@ -202,6 +202,23 @@ export const addPhotoToAlbum = async (
   return photo
 }
 
+export const updatePhotoMemo = async (photoId: string, memo: string): Promise<Photo> => {
+  const db = await getDb()
+  const tx = db.transaction(PHOTO_STORE, 'readwrite')
+  const store = tx.objectStore(PHOTO_STORE)
+
+  const photo = (await toPromise(store.get(photoId))) as Photo | undefined
+  if (!photo) {
+    tx.abort()
+    throw new Error('画像が見つかりません。')
+  }
+
+  const updated: Photo = { ...photo, memo: memo.trim() || undefined }
+  store.put(updated)
+  await completeTx(tx)
+  return updated
+}
+
 export const deletePhotosFromAlbum = async (
   albumId: string,
   photoIds: string[],

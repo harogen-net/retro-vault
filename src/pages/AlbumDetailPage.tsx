@@ -19,6 +19,7 @@ import {
 	IonTitle,
 	IonToolbar,
 	useIonRouter,
+	useIonViewWillEnter,
 } from '@ionic/react'
 import { add, checkmarkCircle, ellipsisHorizontal } from 'ionicons/icons'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -103,11 +104,27 @@ export const AlbumDetailPage = () => {
     }
   }, [albumId])
 
+  useIonViewWillEnter(() => {
+    if (!albumId) {
+      return
+    }
+
+    void fetchAlbumData(albumId)
+      .then(({ albumData, photoData }) => {
+        setAlbum(albumData)
+        setPhotos(photoData)
+      })
+      .catch(() => {
+        // サイレントフェール。初回ロードエラーは useEffect で表示済み
+      })
+  })
+
   const photoUrls = useMemo(() => {
     return photos.map((photo) => ({
       id: photo.id,
       src: URL.createObjectURL(photo.blob),
       createdAt: photo.createdAt,
+      memo: photo.memo,
     }))
   }, [photos])
 
@@ -378,6 +395,7 @@ export const AlbumDetailPage = () => {
                       <article className="tile">
                         <img src={photo.src} alt="撮影画像" loading="lazy" decoding="async" />
                         <p>{formatDateTime(photo.createdAt)}</p>
+                        {photo.memo && <p className="tile-memo">{photo.memo}</p>}
                         {selectionMode && (
                           <span className="tile-checkmark" aria-hidden="true">
                             <IonIcon icon={checkmarkCircle} />
