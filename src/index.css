@@ -1,0 +1,58 @@
+:root {
+  --ink-main: #162120;
+  --ink-subtle: #50615d;
+  --line-soft: #cfd5c8;
+  --line-strong: #8f9988;
+  --paper: #f4efe2;
+  --paper-deep: #e5dfcb;
+  --mist: #d9e5df;
+  --shadow: 0 18px 48px rgba(32, 29, 18, 0.18);
+  font-family: 'Avenir Next', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100svh;
+}
+
+body {
+  margin: 0;
+  color: var(--ink-main);
+  background:
+    radial-gradient(circle at 8% 14%, rgba(255, 255, 255, 0.8), transparent 40%),
+    radial-gradient(circle at 86% 8%, rgba(209, 226, 218, 0.8), transparent 40%),
+    linear-gradient(170deg, var(--paper), var(--paper-deep));
+}
+
+#root {
+  position: relative;
+}
+
+#root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.12) 0,
+    rgba(255, 255, 255, 0.12) 2px,
+    transparent 2px,
+    transparent 16px
+  );
+  opacity: 0.34;
+}
+
+a {
+  color: inherit;
+}
