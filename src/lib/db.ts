@@ -108,6 +108,16 @@ export const listPhotosByAlbum = async (albumId: string): Promise<Photo[]> => {
   return photos.sort((a, b) => b.createdAt - a.createdAt)
 }
 
+export const getPhotoById = async (photoId: string): Promise<Photo | undefined> => {
+  const db = await getDb()
+  const tx = db.transaction(PHOTO_STORE, 'readonly')
+  const store = tx.objectStore(PHOTO_STORE)
+  const photo = await toPromise(store.get(photoId))
+  await completeTx(tx)
+
+  return photo
+}
+
 export const addPhotoToAlbum = async (
   albumId: string,
   preparedPhoto: PreparedPhoto,

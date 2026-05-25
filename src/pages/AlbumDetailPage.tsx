@@ -194,10 +194,16 @@ export const AlbumDetailPage = () => {
               <IonRow>
                 {photoUrls.map((photo) => (
                   <IonCol key={photo.id} size="6" sizeMd="4" sizeLg="3">
-                    <article className="tile">
-                      <img src={photo.src} alt="撮影画像" loading="lazy" />
-                      <p>{formatDateTime(photo.createdAt)}</p>
-                    </article>
+                    <button
+                      type="button"
+                      className="tile-button"
+                      onClick={() => navigate(`/albums/${album.id}/photos/${photo.id}`)}
+                    >
+                      <article className="tile">
+                        <img src={photo.src} alt="撮影画像" loading="lazy" />
+                        <p>{formatDateTime(photo.createdAt)}</p>
+                      </article>
+                    </button>
                   </IonCol>
                 ))}
               </IonRow>
