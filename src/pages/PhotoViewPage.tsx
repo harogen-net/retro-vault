@@ -1,20 +1,21 @@
 import {
-    IonButton,
-    IonButtons,
-    IonContent,
-    IonHeader,
-    IonPage,
-    IonTitle,
-    IonToolbar,
+	IonButton,
+	IonButtons,
+	IonContent,
+	IonHeader,
+	IonPage,
+	IonTitle,
+	IonToolbar,
+	useIonRouter,
 } from '@ionic/react'
 import { useEffect, useMemo, useState } from 'react'
-import { useHistory, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { getAlbum, getPhotoById } from '../lib/db'
 import type { Album, Photo } from '../types'
 
 export const PhotoViewPage = () => {
   const { albumId, photoId } = useParams<{ albumId: string; photoId: string }>()
-  const history = useHistory()
+  const router = useIonRouter()
   const invalidParams = !albumId || !photoId
 
   const [album, setAlbum] = useState<Album | null>(null)
@@ -82,11 +83,11 @@ export const PhotoViewPage = () => {
 
   const backToAlbum = () => {
     if (albumId) {
-      history.push(`/albums/${albumId}`)
+      router.push(`/albums/${albumId}`, 'back')
       return
     }
 
-    history.push('/')
+    router.push('/', 'back')
   }
 
   if (loading) {
@@ -140,7 +141,12 @@ export const PhotoViewPage = () => {
 
       <IonContent fullscreen className="photo-content">
         <section className="photo-stage">
-          <img src={photoUrl} alt="撮影画像の拡大表示" className="photo-fullscreen" />
+          <img
+            src={photoUrl}
+            alt="撮影画像の拡大表示"
+            className="photo-fullscreen"
+            decoding="async"
+          />
         </section>
       </IonContent>
     </IonPage>

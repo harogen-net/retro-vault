@@ -10,7 +10,7 @@ function App() {
   return (
     <IonApp>
       <IonReactRouter>
-        <IonRouterOutlet>
+        <IonRouterOutlet animated>
           <Route path="/" component={AlbumsPage} exact />
           <Route path="/albums/:albumId" component={AlbumDetailPage} exact />
           <Route path="/albums/:albumId/photos/:photoId" component={PhotoViewPage} exact />

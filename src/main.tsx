@@ -8,15 +8,16 @@ import '@ionic/react/css/structure.css'
 import '@ionic/react/css/text-alignment.css'
 import '@ionic/react/css/text-transformation.css'
 import '@ionic/react/css/typography.css'
-import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
+import { fullWidthSlideAnimation } from './lib/navAnimation'
 
-setupIonicReact()
+setupIonicReact({
+  mode: 'ios',
+  navAnimation: fullWidthSlideAnimation,
+})
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+  <App />,
 )

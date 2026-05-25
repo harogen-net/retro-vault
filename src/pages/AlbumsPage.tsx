@@ -12,10 +12,10 @@ import {
 	IonText,
 	IonTitle,
 	IonToolbar,
+	useIonRouter,
 } from '@ionic/react'
 import { add } from 'ionicons/icons'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useHistory } from 'react-router-dom'
 import { JPEG_QUALITY, MAX_IMAGE_EDGE } from '../config/constants'
 import { addPhotoToAlbum, createAlbum, listAlbums } from '../lib/db'
 import { formatDateTime } from '../lib/format'
@@ -38,7 +38,7 @@ export const AlbumsPage = () => {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const history = useHistory()
+  const router = useIonRouter()
 
   const albumCountLabel = useMemo(() => {
     if (albums.length === 0) {
@@ -100,7 +100,7 @@ export const AlbumsPage = () => {
 
       const data = await listAlbums()
       setAlbums(data)
-      history.push(`/albums/${album.id}`)
+      router.push(`/albums/${album.id}`, 'forward')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'アルバム作成に失敗しました。')
     } finally {
@@ -134,7 +134,7 @@ export const AlbumsPage = () => {
                   button
                   detail
                   onClick={() => {
-                    history.push(`/albums/${album.id}`)
+                    router.push(`/albums/${album.id}`, 'forward')
                   }}
                 >
                   <IonLabel className="album-row">

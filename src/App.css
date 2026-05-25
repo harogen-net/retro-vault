@@ -129,7 +129,6 @@
 .photo-toolbar {
   --background: rgba(0, 0, 0, 0.75);
   --color: #fff;
-  backdrop-filter: blur(4px);
 }
 
 .photo-stage {
@@ -161,7 +160,6 @@ ion-fab-button {
 ion-toolbar {
   --background: rgba(244, 239, 226, 0.92);
   --color: var(--ink-main);
-  backdrop-filter: blur(5px);
 }
 
 .visually-hidden {
