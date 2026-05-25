@@ -1,20 +1,20 @@
 import {
-  IonButton,
-  IonButtons,
-  IonContent,
-  IonHeader,
-  IonPage,
-  IonTitle,
-  IonToolbar,
+    IonButton,
+    IonButtons,
+    IonContent,
+    IonHeader,
+    IonPage,
+    IonTitle,
+    IonToolbar,
 } from '@ionic/react'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useHistory, useParams } from 'react-router-dom'
 import { getAlbum, getPhotoById } from '../lib/db'
 import type { Album, Photo } from '../types'
 
 export const PhotoViewPage = () => {
   const { albumId, photoId } = useParams<{ albumId: string; photoId: string }>()
-  const navigate = useNavigate()
+  const history = useHistory()
   const invalidParams = !albumId || !photoId
 
   const [album, setAlbum] = useState<Album | null>(null)
@@ -82,11 +82,11 @@ export const PhotoViewPage = () => {
 
   const backToAlbum = () => {
     if (albumId) {
-      navigate(`/albums/${albumId}`)
+      history.push(`/albums/${albumId}`)
       return
     }
 
-    navigate('/')
+    history.push('/')
   }
 
   if (loading) {

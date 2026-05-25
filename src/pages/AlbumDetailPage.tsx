@@ -12,7 +12,7 @@ import {
 	IonToolbar,
 } from '@ionic/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useHistory, useParams } from 'react-router-dom'
 import { JPEG_QUALITY, MAX_IMAGE_EDGE } from '../config/constants'
 import { addPhotoToAlbum, getAlbum, listPhotosByAlbum } from '../lib/db'
 import { formatDateTime } from '../lib/format'
@@ -27,7 +27,7 @@ export const AlbumDetailPage = () => {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const navigate = useNavigate()
+  const history = useHistory()
 
   useEffect(() => {
     let cancelled = false
@@ -130,7 +130,7 @@ export const AlbumDetailPage = () => {
       return (
         <main className="screen">
           <p className="error-banner">アルバムIDが不正です。</p>
-          <button type="button" className="back-link back-button" onClick={() => navigate('/')}>
+          <button type="button" className="back-link back-button" onClick={() => history.push('/')}>
             一覧へ戻る
           </button>
         </main>
@@ -151,7 +151,7 @@ export const AlbumDetailPage = () => {
       <IonPage>
         <IonContent className="ion-padding">
           <p className="error-banner">{error ?? 'アルバムが見つかりません。'}</p>
-          <button type="button" className="back-link back-button" onClick={() => navigate('/')}>
+          <button type="button" className="back-link back-button" onClick={() => history.push('/')}>
             一覧へ戻る
           </button>
         </IonContent>
@@ -164,7 +164,7 @@ export const AlbumDetailPage = () => {
       <IonHeader translucent>
         <IonToolbar>
           <IonButtons slot="start">
-            <IonButton fill="clear" onClick={() => navigate('/')}>
+            <IonButton fill="clear" onClick={() => history.push('/')}>
               一覧
             </IonButton>
           </IonButtons>
@@ -197,7 +197,7 @@ export const AlbumDetailPage = () => {
                     <button
                       type="button"
                       className="tile-button"
-                      onClick={() => navigate(`/albums/${album.id}/photos/${photo.id}`)}
+                      onClick={() => history.push(`/albums/${album.id}/photos/${photo.id}`)}
                     >
                       <article className="tile">
                         <img src={photo.src} alt="撮影画像" loading="lazy" />
