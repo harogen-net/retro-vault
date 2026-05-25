@@ -17,6 +17,7 @@ import {
 } from '@ionic/react'
 import { add } from 'ionicons/icons'
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { useAppModal } from '../components/appModalContext'
 import { JPEG_QUALITY, MAX_IMAGE_EDGE } from '../config/constants'
 import { addPhotoToAlbum, createAlbum, listAlbums } from '../lib/db'
 import { formatDateTime } from '../lib/format'
@@ -40,6 +41,7 @@ export const AlbumsPage = () => {
   const [busy, setBusy] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const router = useIonRouter()
+  const modal = useAppModal()
 
   const albumCountLabel = useMemo(() => {
     if (albums.length === 0) {
@@ -82,7 +84,14 @@ export const AlbumsPage = () => {
       return
     }
 
-    const name = window.prompt('アルバム名を入力してください', defaultAlbumTitle())?.trim()
+    const name = (await modal.prompt({
+      title: '新規アルバム',
+      message: 'アルバム名を入力してください。',
+      defaultValue: defaultAlbumTitle(),
+      placeholder: 'アルバム名',
+      confirmText: '作成',
+      cancelText: 'キャンセル',
+    }))?.trim()
     if (!name) {
       return
     }

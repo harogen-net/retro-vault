@@ -23,9 +23,11 @@ import {
 import { add, checkmarkCircle, ellipsisHorizontal } from 'ionicons/icons'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useAppModal } from '../components/appModalContext'
 import { JPEG_QUALITY, MAX_IMAGE_EDGE } from '../config/constants'
 import {
 	addPhotoToAlbum,
+	deleteAlbumWithPhotos,
 	deletePhotosFromAlbum,
 	getAlbum,
 	listAlbums,
@@ -51,6 +53,7 @@ export const AlbumDetailPage = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const router = useIonRouter()
   const menuTriggerId = 'album-detail-menu-trigger'
+  const modal = useAppModal()
 
   const fetchAlbumData = async (id: string) => {
     const [albumData, photoData] = await Promise.all([getAlbum(id), listPhotosByAlbum(id)])
@@ -125,7 +128,14 @@ export const AlbumDetailPage = () => {
       return
     }
 
-    const title = window.prompt('アルバム名を入力してください', album.title)?.trim()
+    const title = (await modal.prompt({
+      title: 'アルバム名変更',
+      message: '新しいアルバム名を入力してください。',
+      defaultValue: album.title,
+      placeholder: 'アルバム名',
+      confirmText: '変更',
+      cancelText: 'キャンセル',
+    }))?.trim()
     if (!title || title === album.title) {
       return
     }
@@ -190,7 +200,12 @@ export const AlbumDetailPage = () => {
       return
     }
 
-    const ok = window.confirm(`選択中の${selectedPhotoIds.length}件を削除しますか？`)
+    const ok = await modal.confirm({
+      title: '画像を削除',
+      message: `選択中の${selectedPhotoIds.length}件を削除しますか？`,
+      confirmText: '削除',
+      cancelText: 'キャンセル',
+    })
     if (!ok) {
       return
     }
@@ -247,6 +262,33 @@ export const AlbumDetailPage = () => {
       setSelectionMode(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : '画像移動に失敗しました。')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onDeleteAlbum = async () => {
+    if (!album) {
+      return
+    }
+
+    const ok = await modal.confirm({
+      title: 'アルバム削除',
+      message: `「${album.title}」を削除します。紐づく画像もすべて削除されます。`,
+      confirmText: '削除',
+      cancelText: 'キャンセル',
+    })
+    if (!ok) {
+      return
+    }
+
+    try {
+      setBusy(true)
+      setError(null)
+      await deleteAlbumWithPhotos(album.id)
+      router.push('/', 'back')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'アルバム削除に失敗しました。')
     } finally {
       setBusy(false)
     }
@@ -371,6 +413,9 @@ export const AlbumDetailPage = () => {
             </IonItem>
             <IonItem button onClick={toggleSelectionMode}>
               {selectionMode ? '選択モード終了' : '選択モード開始'}
+            </IonItem>
+            <IonItem button onClick={() => void onDeleteAlbum()}>
+              アルバム削除
             </IonItem>
           </IonList>
         </IonPopover>

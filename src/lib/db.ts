@@ -118,6 +118,30 @@ export const renameAlbumTitle = async (albumId: string, title: string): Promise<
   return updatedAlbum
 }
 
+export const deleteAlbumWithPhotos = async (albumId: string): Promise<void> => {
+  const db = await getDb()
+  const tx = db.transaction([ALBUM_STORE, PHOTO_STORE], 'readwrite')
+  const albumStore = tx.objectStore(ALBUM_STORE)
+  const photoStore = tx.objectStore(PHOTO_STORE)
+  const photoIndex = photoStore.index('by_album_createdAt')
+
+  const album = (await toPromise(albumStore.get(albumId))) as Album | undefined
+  if (!album) {
+    tx.abort()
+    throw new Error('アルバムが見つかりません。')
+  }
+
+  const range = IDBKeyRange.bound([albumId, 0], [albumId, Number.MAX_SAFE_INTEGER])
+  const photos = (await toPromise(photoIndex.getAll(range))) as Photo[]
+
+  for (const photo of photos) {
+    photoStore.delete(photo.id)
+  }
+
+  albumStore.delete(albumId)
+  await completeTx(tx)
+}
+
 export const listPhotosByAlbum = async (albumId: string): Promise<Photo[]> => {
   const db = await getDb()
   const tx = db.transaction(PHOTO_STORE, 'readonly')
