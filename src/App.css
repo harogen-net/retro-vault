@@ -1,117 +1,71 @@
 .screen {
-  width: min(1080px, 100% - 2rem);
+  width: min(1080px, 100% - 1rem);
   margin: 0 auto;
-  padding: 1.5rem 0 5rem;
+  padding: 1rem 0 5rem;
 }
 
-.page-header {
-  margin-bottom: 1rem;
-}
-
-.page-header h1 {
-  margin: 0;
-  font-size: clamp(2rem, 5vw, 3rem);
-  letter-spacing: 0.03em;
-}
-
-.page-header p {
-  margin: 0.4rem 0 0;
+.page-subtitle {
+  margin: 0.2rem 0 0.8rem;
   color: var(--ink-subtle);
 }
 
 .album-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--line-soft);
+  margin-inline: 0;
+  background: transparent;
+}
+
+.album-list ion-item {
+  --border-color: var(--line-soft);
+  --background: rgba(255, 255, 255, 0.72);
+  --inner-padding-top: 0.35rem;
+  --inner-padding-bottom: 0.35rem;
 }
 
 .album-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 1rem;
-  align-items: center;
-  text-decoration: none;
-  padding: 1rem 0.5rem;
-  border-bottom: 1px solid var(--line-soft);
   color: var(--ink-main);
 }
 
-.album-row:hover {
-  background: rgba(255, 255, 255, 0.45);
-}
-
 .album-title {
-  font-size: 1.06rem;
+  margin: 0;
+  font-size: 1rem;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
 .album-meta {
+  margin: 0.3rem 0 0;
   color: var(--ink-subtle);
-  font-size: 0.9rem;
-  white-space: nowrap;
-}
-
-.fab {
-  position: fixed;
-  right: 1.4rem;
-  bottom: 1.4rem;
-  width: 3.6rem;
-  height: 3.6rem;
-  border: none;
-  border-radius: 999px;
-  font-size: 1.9rem;
-  line-height: 1;
-  color: #fff;
-  background: linear-gradient(140deg, #c04a2f, #f08d32);
-  box-shadow: 0 10px 24px rgba(59, 24, 16, 0.28);
-  cursor: pointer;
-}
-
-.fab:disabled {
-  opacity: 0.7;
-  cursor: wait;
-}
-
-.detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 1.2rem;
-  border-bottom: 1px solid var(--line-soft);
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
-}
-
-.detail-header h1 {
-  margin: 0.35rem 0 0.7rem;
-  font-size: clamp(1.7rem, 4vw, 2.5rem);
+  font-size: 0.86rem;
 }
 
 .meta-line {
+  display: block;
   margin: 0.2rem 0;
   color: var(--ink-subtle);
+}
+
+.detail-meta {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 0.85rem;
 }
 
 .back-link {
   color: var(--ink-main);
 }
 
-.add-button {
-  border: 1px solid var(--line-strong);
-  background: rgba(255, 255, 255, 0.8);
-  color: var(--ink-main);
-  border-radius: 999px;
-  padding: 0.6rem 1.1rem;
-  font-weight: 600;
+.back-button {
+  border: none;
+  background: transparent;
+  padding: 0;
   cursor: pointer;
+  text-decoration: underline;
 }
 
 .tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 0.75rem;
+  padding: 0;
 }
 
 .tile {
@@ -123,7 +77,7 @@
 
 .tile img {
   width: 100%;
-  height: 140px;
+  height: 138px;
   object-fit: cover;
   display: block;
 }
@@ -149,6 +103,19 @@
   margin-top: 1rem;
 }
 
+ion-fab-button {
+  --background: #c04a2f;
+  --background-activated: #d45e3f;
+  --background-hover: #d45e3f;
+  --box-shadow: 0 10px 24px rgba(59, 24, 16, 0.28);
+}
+
+ion-toolbar {
+  --background: rgba(244, 239, 226, 0.92);
+  --color: var(--ink-main);
+  backdrop-filter: blur(5px);
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -156,15 +123,4 @@
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
-}
-
-@media (max-width: 700px) {
-  .album-row {
-    grid-template-columns: 1fr;
-    gap: 0.25rem;
-  }
-
-  .detail-header {
-    flex-direction: column;
-  }
 }

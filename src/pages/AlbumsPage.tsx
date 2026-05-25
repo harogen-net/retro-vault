@@ -1,5 +1,21 @@
+import {
+	IonContent,
+	IonFab,
+	IonFabButton,
+	IonHeader,
+	IonIcon,
+	IonItem,
+	IonLabel,
+	IonList,
+	IonNote,
+	IonPage,
+	IonText,
+	IonTitle,
+	IonToolbar,
+} from '@ionic/react'
+import { add } from 'ionicons/icons'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { JPEG_QUALITY, MAX_IMAGE_EDGE } from '../config/constants'
 import { addPhotoToAlbum, createAlbum, listAlbums } from '../lib/db'
 import { formatDateTime } from '../lib/format'
@@ -93,51 +109,65 @@ export const AlbumsPage = () => {
   }
 
   return (
-    <main className="screen">
-      <header className="page-header">
-        <h1>Albums</h1>
-        <p>{albumCountLabel}</p>
-      </header>
+    <IonPage>
+      <IonHeader translucent>
+        <IonToolbar>
+          <IonTitle>Albums</IonTitle>
+        </IonToolbar>
+      </IonHeader>
 
-      {error && <p className="error-banner">{error}</p>}
+      <IonContent fullscreen>
+        <section className="screen ion-padding-top ion-padding-horizontal">
+          <p className="page-subtitle">{albumCountLabel}</p>
 
-      {loading ? (
-        <p className="state-text">読み込み中...</p>
-      ) : albums.length === 0 ? (
-        <p className="state-text">右下のボタンから撮影してアルバムを作成できます。</p>
-      ) : (
-        <ul className="album-list" aria-label="アルバム一覧">
-          {albums.map((album) => (
-            <li key={album.id}>
-              <Link to={`/albums/${album.id}`} className="album-row">
-                <span className="album-title">{album.title}</span>
-                <span className="album-meta">{album.photoCount}枚</span>
-                <span className="album-meta">更新: {formatDateTime(album.updatedAt)}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+          {error && <p className="error-banner">{error}</p>}
 
-      <button
-        type="button"
-        className="fab"
-        onClick={onFabClick}
-        disabled={busy}
-        aria-label="撮影して新規アルバムを作成"
-        title="撮影して新規アルバムを作成"
-      >
-        {busy ? '...' : '+'}
-      </button>
+          {loading ? (
+            <p className="state-text">読み込み中...</p>
+          ) : albums.length === 0 ? (
+            <p className="state-text">右下のボタンから撮影してアルバムを作成できます。</p>
+          ) : (
+            <IonList inset className="album-list" aria-label="アルバム一覧">
+              {albums.map((album) => (
+                <IonItem
+                  key={album.id}
+                  button
+                  detail
+                  onClick={() => {
+                    navigate(`/albums/${album.id}`)
+                  }}
+                >
+                  <IonLabel className="album-row">
+                    <h2 className="album-title">{album.title}</h2>
+                    <p className="album-meta">更新: {formatDateTime(album.updatedAt)}</p>
+                  </IonLabel>
+                  <IonNote slot="end">{album.photoCount}枚</IonNote>
+                </IonItem>
+              ))}
+            </IonList>
+          )}
+        </section>
+
+        <IonFab slot="fixed" vertical="bottom" horizontal="end">
+          <IonFabButton
+            onClick={onFabClick}
+            disabled={busy}
+            aria-label="撮影して新規アルバムを作成"
+          >
+            {busy ? <IonText>...</IonText> : <IonIcon icon={add} />}
+          </IonFabButton>
+        </IonFab>
+      </IonContent>
 
       <input
         ref={fileInputRef}
+        hidden
         className="visually-hidden"
         type="file"
         accept="image/*"
         capture="environment"
         onChange={onCaptureNewAlbum}
       />
-    </main>
+    </IonPage>
   )
 }

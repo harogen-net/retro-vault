@@ -1,5 +1,18 @@
+import {
+	IonButton,
+	IonButtons,
+	IonCol,
+	IonContent,
+	IonGrid,
+	IonHeader,
+	IonPage,
+	IonRow,
+	IonText,
+	IonTitle,
+	IonToolbar,
+} from '@ionic/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { JPEG_QUALITY, MAX_IMAGE_EDGE } from '../config/constants'
 import { addPhotoToAlbum, getAlbum, listPhotosByAlbum } from '../lib/db'
 import { formatDateTime } from '../lib/format'
@@ -14,6 +27,7 @@ export const AlbumDetailPage = () => {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     let cancelled = false
@@ -116,71 +130,91 @@ export const AlbumDetailPage = () => {
       return (
         <main className="screen">
           <p className="error-banner">アルバムIDが不正です。</p>
-          <Link to="/" className="back-link">
+          <button type="button" className="back-link back-button" onClick={() => navigate('/')}>
             一覧へ戻る
-          </Link>
+          </button>
         </main>
       )
     }
 
     return (
-      <main className="screen">
-        <p className="state-text">読み込み中...</p>
-      </main>
+      <IonPage>
+        <IonContent className="ion-padding">
+          <p className="state-text">読み込み中...</p>
+        </IonContent>
+      </IonPage>
     )
   }
 
   if (!album) {
     return (
-      <main className="screen">
-        <p className="error-banner">{error ?? 'アルバムが見つかりません。'}</p>
-        <Link to="/" className="back-link">
-          一覧へ戻る
-        </Link>
-      </main>
+      <IonPage>
+        <IonContent className="ion-padding">
+          <p className="error-banner">{error ?? 'アルバムが見つかりません。'}</p>
+          <button type="button" className="back-link back-button" onClick={() => navigate('/')}>
+            一覧へ戻る
+          </button>
+        </IonContent>
+      </IonPage>
     )
   }
 
   return (
-    <main className="screen">
-      <header className="detail-header">
-        <div>
-          <Link to="/" className="back-link">
-            一覧へ戻る
-          </Link>
-          <h1>{album.title}</h1>
-          <p className="meta-line">作成: {formatDateTime(album.createdAt)}</p>
-          <p className="meta-line">更新: {formatDateTime(album.updatedAt)}</p>
-          <p className="meta-line">画像: {album.photoCount}枚</p>
-        </div>
-        <button type="button" className="add-button" onClick={onAddPhotoClick} disabled={busy}>
-          {busy ? '追加中...' : '画像を追加'}
-        </button>
-      </header>
+    <IonPage>
+      <IonHeader translucent>
+        <IonToolbar>
+          <IonButtons slot="start">
+            <IonButton fill="clear" onClick={() => navigate('/')}>
+              一覧
+            </IonButton>
+          </IonButtons>
+          <IonTitle>{album.title}</IonTitle>
+          <IonButtons slot="end">
+            <IonButton onClick={onAddPhotoClick} disabled={busy}>
+              {busy ? '追加中...' : '画像を追加'}
+            </IonButton>
+          </IonButtons>
+        </IonToolbar>
+      </IonHeader>
 
-      {error && <p className="error-banner">{error}</p>}
+      <IonContent fullscreen>
+        <section className="screen ion-padding">
+          <section className="detail-meta" aria-label="アルバムメタ情報">
+            <IonText className="meta-line">作成: {formatDateTime(album.createdAt)}</IonText>
+            <IonText className="meta-line">更新: {formatDateTime(album.updatedAt)}</IonText>
+            <IonText className="meta-line">画像: {album.photoCount}枚</IonText>
+          </section>
 
-      {photoUrls.length === 0 ? (
-        <p className="state-text">まだ画像がありません。上のボタンから追加できます。</p>
-      ) : (
-        <section className="tiles" aria-label="撮影画像一覧">
-          {photoUrls.map((photo) => (
-            <article key={photo.id} className="tile">
-              <img src={photo.src} alt="撮影画像" loading="lazy" />
-              <p>{formatDateTime(photo.createdAt)}</p>
-            </article>
-          ))}
+          {error && <p className="error-banner">{error}</p>}
+
+          {photoUrls.length === 0 ? (
+            <p className="state-text">まだ画像がありません。上のボタンから追加できます。</p>
+          ) : (
+            <IonGrid className="tiles" aria-label="撮影画像一覧">
+              <IonRow>
+                {photoUrls.map((photo) => (
+                  <IonCol key={photo.id} size="6" sizeMd="4" sizeLg="3">
+                    <article className="tile">
+                      <img src={photo.src} alt="撮影画像" loading="lazy" />
+                      <p>{formatDateTime(photo.createdAt)}</p>
+                    </article>
+                  </IonCol>
+                ))}
+              </IonRow>
+            </IonGrid>
+          )}
         </section>
-      )}
+      </IonContent>
 
       <input
         ref={fileInputRef}
+        hidden
         className="visually-hidden"
         type="file"
         accept="image/*"
         capture="environment"
         onChange={onAddPhoto}
       />
-    </main>
+    </IonPage>
   )
 }

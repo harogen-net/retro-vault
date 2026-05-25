@@ -7,6 +7,14 @@
   --paper-deep: #e5dfcb;
   --mist: #d9e5df;
   --shadow: 0 18px 48px rgba(32, 29, 18, 0.18);
+  --ion-color-primary: #c04a2f;
+  --ion-color-primary-rgb: 192, 74, 47;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-shade: #a8422a;
+  --ion-color-primary-tint: #c65c43;
+  --ion-background-color: transparent;
+  --ion-text-color: #162120;
+  --ion-font-family: 'Avenir Next', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
   font-family: 'Avenir Next', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -36,6 +44,10 @@ body {
 
 #root {
   position: relative;
+}
+
+ion-app {
+  background: transparent;
 }
 
 #root::before {
