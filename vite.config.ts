@@ -15,9 +15,9 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.svg'],
         manifest: {
-          name: 'Field Album',
-          short_name: 'Album',
-          description: 'Camera-first offline album application',
+          name: 'Retro Vault',
+          short_name: 'RetroVault',
+          description: 'Retro-styled offline photo vault application',
           theme_color: '#133d3a',
           background_color: '#f4efe2',
           display: 'standalone',
