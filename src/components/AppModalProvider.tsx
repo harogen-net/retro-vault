@@ -1,11 +1,11 @@
 import { useIonAlert } from '@ionic/react'
 import { useCallback, useMemo, type PropsWithChildren } from 'react'
 import {
-	AppModalContext,
-	type AlertOptions,
-	type ConfirmOptions,
-	type ModalApi,
-	type PromptOptions,
+  AppModalContext,
+  type AlertOptions,
+  type ConfirmOptions,
+  type ModalApi,
+  type PromptOptions,
 } from './appModalContext'
 
 export const AppModalProvider = ({ children }: PropsWithChildren) => {
@@ -15,6 +15,7 @@ export const AppModalProvider = ({ children }: PropsWithChildren) => {
     (options: AlertOptions): Promise<void> =>
       new Promise((resolve) => {
         void present({
+          cssClass: 'app-alert',
           header: options.title,
           message: options.message,
           buttons: [{ text: options.confirmText ?? '閉じる', handler: () => { resolve() } }],
@@ -27,6 +28,7 @@ export const AppModalProvider = ({ children }: PropsWithChildren) => {
     (options: ConfirmOptions): Promise<boolean> =>
       new Promise((resolve) => {
         void present({
+          cssClass: 'app-alert',
           header: options.title,
           message: options.message,
           buttons: [
@@ -42,6 +44,7 @@ export const AppModalProvider = ({ children }: PropsWithChildren) => {
     (options: PromptOptions): Promise<string | null> =>
       new Promise((resolve) => {
         void present({
+          cssClass: 'app-alert',
           header: options.title,
           message: options.message,
           inputs: [{ name: 'value', type: 'text', value: options.defaultValue ?? '', placeholder: options.placeholder ?? '' }],

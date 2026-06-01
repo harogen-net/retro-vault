@@ -1,19 +1,23 @@
 :root {
-  --ink-main: #162120;
-  --ink-subtle: #50615d;
-  --line-soft: #cfd5c8;
-  --line-strong: #8f9988;
-  --paper: #f4efe2;
-  --paper-deep: #e5dfcb;
-  --mist: #d9e5df;
-  --shadow: 0 18px 48px rgba(32, 29, 18, 0.18);
-  --ion-color-primary: #c04a2f;
-  --ion-color-primary-rgb: 192, 74, 47;
-  --ion-color-primary-contrast: #ffffff;
-  --ion-color-primary-shade: #a8422a;
-  --ion-color-primary-tint: #c65c43;
+  --ink-main: #ecf8ff;
+  --ink-subtle: #9fc3d9;
+  --line-soft: #2f6f91;
+  --line-strong: #4fb4da;
+  --paper: #121826;
+  --paper-deep: #2b1241;
+  --mist: #1b2d3f;
+  --accent-cyan: #31f7ff;
+  --accent-gold: #ffbb4f;
+  --accent-gold-strong: #e19524;
+  --accent-purple: #7d4dff;
+  --shadow: 0 18px 48px rgba(5, 8, 19, 0.45);
+  --ion-color-primary: #ffbb4f;
+  --ion-color-primary-rgb: 255, 187, 79;
+  --ion-color-primary-contrast: #1b1207;
+  --ion-color-primary-shade: #e6a943;
+  --ion-color-primary-tint: #ffc461;
   --ion-background-color: transparent;
-  --ion-text-color: #162120;
+  --ion-text-color: #ecf8ff;
   --ion-font-family: 'Avenir Next', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
   font-family: 'Avenir Next', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
   line-height: 1.5;
@@ -37,8 +41,9 @@ body {
   margin: 0;
   color: var(--ink-main);
   background:
-    radial-gradient(circle at 8% 14%, rgba(255, 255, 255, 0.8), transparent 40%),
-    radial-gradient(circle at 86% 8%, rgba(209, 226, 218, 0.8), transparent 40%),
+    radial-gradient(circle at 10% 12%, rgba(49, 247, 255, 0.22), transparent 38%),
+    radial-gradient(circle at 85% 10%, rgba(125, 77, 255, 0.24), transparent 40%),
+    radial-gradient(circle at 50% 100%, rgba(255, 187, 79, 0.16), transparent 45%),
     linear-gradient(170deg, var(--paper), var(--paper-deep));
 }
 
@@ -57,12 +62,12 @@ ion-app {
   pointer-events: none;
   background-image: repeating-linear-gradient(
     125deg,
-    rgba(255, 255, 255, 0.12) 0,
-    rgba(255, 255, 255, 0.12) 2px,
+    rgba(49, 247, 255, 0.06) 0,
+    rgba(49, 247, 255, 0.06) 2px,
     transparent 2px,
     transparent 16px
   );
-  opacity: 0.34;
+  opacity: 0.4;
 }
 
 a {
