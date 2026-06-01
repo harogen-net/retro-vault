@@ -20,6 +20,38 @@
 
 1. npm run build
 
+## GitHub Pages へデプロイ
+
+1. 初回のみ gh-pages を追加
+
+```bash
+npm install -D gh-pages
+```
+
+2. package.json に以下 scripts を追加
+
+```json
+{
+	"scripts": {
+		"predeploy": "npm run build",
+		"deploy": "gh-pages -d dist"
+	}
+}
+```
+
+3. デプロイ実行
+
+```bash
+npm run deploy
+```
+
+4. GitHub リポジトリの Settings > Pages で `Branch: gh-pages / (root)` を選択
+
+補足:
+
+- このプロジェクトは [vite.config.ts](vite.config.ts) で GitHub Pages 配信用の base パスを設定済みです。
+- ルーティングは [src/App.tsx](src/App.tsx) で Hash ルーター化しているため、Pages 上での直接アクセスでも 404 を回避できます。
+
 ## 画像リサイズ定数
 
 画像処理の定数は [src/config/constants.ts](src/config/constants.ts) で変更できます。
