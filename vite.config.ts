@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.svg'],
+        includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
         manifest: {
           name: 'Retro Vault',
           short_name: 'RetroVault',
@@ -25,10 +25,22 @@ export default defineConfig(({ mode }) => {
           scope: base,
           icons: [
             {
+              src: 'icon-192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: 'icon-512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any maskable',
+            },
+            {
               src: 'favicon.svg',
               sizes: 'any',
               type: 'image/svg+xml',
-              purpose: 'any maskable',
+              purpose: 'any',
             },
           ],
         },
