@@ -60,13 +60,13 @@ ion-app {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background-image: repeating-linear-gradient(
+  /* background-image: repeating-linear-gradient(
     125deg,
     rgba(49, 247, 255, 0.06) 0,
     rgba(49, 247, 255, 0.06) 2px,
     transparent 2px,
     transparent 16px
-  );
+  ); */
   opacity: 0.4;
 }
 
