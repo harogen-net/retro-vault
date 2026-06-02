@@ -1,12 +1,12 @@
 import {
-	IonButton,
-	IonButtons,
-	IonContent,
-	IonHeader,
-	IonPage,
-	IonTitle,
-	IonToolbar,
-	useIonRouter,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonPage,
+  IonTitle,
+  IonToolbar,
+  useIonRouter,
 } from '@ionic/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
@@ -85,12 +85,17 @@ export const PhotoViewPage = () => {
   }, [photoUrl])
 
   const backToAlbum = () => {
-    if (albumId) {
-      router.push(`/albums/${albumId}`, 'back')
+    if (router.canGoBack()) {
+      router.goBack()
       return
     }
 
-    router.push('/', 'back')
+    if (albumId) {
+      router.push(`/albums/${albumId}`, 'root')
+      return
+    }
+
+    router.push('/', 'root')
   }
 
   const onEditMemo = async () => {

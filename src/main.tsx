@@ -12,11 +12,9 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App.tsx'
 import './index.css'
-import { fullWidthSlideAnimation } from './lib/navAnimation'
 
 setupIonicReact({
   mode: 'ios',
-  navAnimation: fullWidthSlideAnimation,
 })
 
 if ('serviceWorker' in navigator) {

@@ -61,6 +61,15 @@ export const AlbumDetailPage = () => {
   const menuTriggerId = "album-detail-menu-trigger";
   const modal = useAppModal();
 
+  const backToAlbums = () => {
+    if (router.canGoBack()) {
+      router.goBack();
+      return;
+    }
+
+    router.push("/", "root");
+  };
+
   const fetchAlbumData = async (id: string) => {
     const [albumData, photoData] = await Promise.all([
       getAlbum(id),
@@ -349,7 +358,7 @@ export const AlbumDetailPage = () => {
       setBusy(true);
       setError(null);
       await deleteAlbumWithPhotos(album.id);
-      router.push("/", "back");
+      backToAlbums();
     } catch (e) {
       setError(e instanceof Error ? e.message : "アルバム削除に失敗しました。");
     } finally {
@@ -365,7 +374,7 @@ export const AlbumDetailPage = () => {
           <button
             type="button"
             className="back-link back-button"
-            onClick={() => router.push("/", "back")}
+            onClick={backToAlbums}
           >
             一覧へ戻る
           </button>
@@ -392,7 +401,7 @@ export const AlbumDetailPage = () => {
           <button
             type="button"
             className="back-link back-button"
-            onClick={() => router.push("/", "back")}
+            onClick={backToAlbums}
           >
             一覧へ戻る
           </button>
@@ -406,7 +415,7 @@ export const AlbumDetailPage = () => {
       <IonHeader translucent>
         <IonToolbar>
           <IonButtons slot="start">
-            <IonButton fill="clear" onClick={() => router.push("/", "back")}>
+            <IonButton fill="clear" onClick={backToAlbums}>
               一覧
             </IonButton>
           </IonButtons>
