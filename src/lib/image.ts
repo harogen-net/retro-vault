@@ -1,15 +1,57 @@
 import { JPEG_QUALITY, MAX_IMAGE_EDGE } from '../config/constants'
 import type { PreparedPhoto } from '../types'
 
-const loadFromImageElement = async (file: Blob): Promise<HTMLImageElement> => {
+type LoadedImage = {
+  image: HTMLImageElement
+  release: () => void
+}
+
+const waitForImageLoad = (img: HTMLImageElement): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (img.complete && img.naturalWidth > 0) {
+      resolve()
+      return
+    }
+
+    const onLoad = () => {
+      cleanup()
+      resolve()
+    }
+    const onError = () => {
+      cleanup()
+      reject(new Error('画像の読み込みに失敗しました。'))
+    }
+    const cleanup = () => {
+      img.removeEventListener('load', onLoad)
+      img.removeEventListener('error', onError)
+    }
+
+    img.addEventListener('load', onLoad)
+    img.addEventListener('error', onError)
+  })
+}
+
+const loadFromImageElement = async (file: Blob): Promise<LoadedImage> => {
   const imageUrl = URL.createObjectURL(file)
+  const img = new Image()
+  img.src = imageUrl
+
   try {
-    const img = new Image()
-    img.src = imageUrl
     await img.decode()
-    return img
-  } finally {
+  } catch {
+    await waitForImageLoad(img)
+  }
+
+  if (img.naturalWidth < 1 || img.naturalHeight < 1) {
     URL.revokeObjectURL(imageUrl)
+    throw new Error('画像サイズの取得に失敗しました。')
+  }
+
+  return {
+    image: img,
+    release: () => {
+      URL.revokeObjectURL(imageUrl)
+    },
   }
 }
 
@@ -34,23 +76,12 @@ export const resizeImageToJpeg = async (
   maxEdge = MAX_IMAGE_EDGE,
   quality = JPEG_QUALITY,
 ): Promise<PreparedPhoto> => {
-  let width: number
-  let height: number
-  let drawSource: CanvasImageSource
-  let closeBitmap: (() => void) | undefined
-
-  if ('createImageBitmap' in window) {
-    const bitmap = await createImageBitmap(file)
-    width = bitmap.width
-    height = bitmap.height
-    drawSource = bitmap
-    closeBitmap = () => bitmap.close()
-  } else {
-    const image = await loadFromImageElement(file)
-    width = image.naturalWidth
-    height = image.naturalHeight
-    drawSource = image
-  }
+  const loaded = await loadFromImageElement(file)
+  const image = loaded.image
+  const width = image.naturalWidth
+  const height = image.naturalHeight
+  const drawSource: CanvasImageSource = image
+  const releaseSource = loaded.release
 
   const longest = Math.max(width, height)
   const scale = longest > maxEdge ? maxEdge / longest : 1
@@ -63,12 +94,15 @@ export const resizeImageToJpeg = async (
 
   const context = canvas.getContext('2d')
   if (!context) {
-    closeBitmap?.()
+    releaseSource?.()
     throw new Error('Canvasの初期化に失敗しました。')
   }
 
-  context.drawImage(drawSource, 0, 0, targetWidth, targetHeight)
-  closeBitmap?.()
+  try {
+    context.drawImage(drawSource, 0, 0, targetWidth, targetHeight)
+  } finally {
+    releaseSource?.()
+  }
 
   const blob = await toBlob(canvas, quality)
 

@@ -15,6 +15,7 @@ export interface Photo {
   sizeBytes: number
   mimeType: string
   blob: Blob
+  thumbnailBlob?: Blob
   memo?: string
 }
 

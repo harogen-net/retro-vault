@@ -281,6 +281,7 @@ ion-alert.app-alert .alert-title {
 
 ion-alert.app-alert .alert-message {
   color: #24384f !important;
+  white-space: pre-line;
 }
 
 ion-alert.app-alert .alert-input {

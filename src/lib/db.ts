@@ -167,6 +167,7 @@ export const getPhotoById = async (photoId: string): Promise<Photo | undefined> 
 export const addPhotoToAlbum = async (
   albumId: string,
   preparedPhoto: PreparedPhoto,
+  thumbnailBlob?: Blob,
 ): Promise<Photo> => {
   const db = await getDb()
   const tx = db.transaction([ALBUM_STORE, PHOTO_STORE], 'readwrite')
@@ -189,6 +190,7 @@ export const addPhotoToAlbum = async (
     sizeBytes: preparedPhoto.sizeBytes,
     mimeType: preparedPhoto.mimeType,
     blob: preparedPhoto.blob,
+    thumbnailBlob,
   }
 
   photoStore.add(photo)

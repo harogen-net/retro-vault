@@ -1,24 +1,28 @@
 import {
-	IonContent,
-	IonFab,
-	IonFabButton,
-	IonHeader,
-	IonIcon,
-	IonItem,
-	IonLabel,
-	IonList,
-	IonNote,
-	IonPage,
-	IonText,
-	IonTitle,
-	IonToolbar,
-	useIonRouter,
-	useIonViewWillEnter,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonFab,
+  IonFabButton,
+  IonHeader,
+  IonIcon,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonNote,
+  IonPage,
+  IonPopover,
+  IonText,
+  IonTitle,
+  IonToolbar,
+  useIonRouter,
+  useIonViewWillEnter,
 } from '@ionic/react'
-import { add } from 'ionicons/icons'
+import { add, ellipsisHorizontal } from 'ionicons/icons'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppModal } from '../components/appModalContext'
-import { JPEG_QUALITY, MAX_IMAGE_EDGE } from '../config/constants'
+import { JPEG_QUALITY, MAX_IMAGE_EDGE, THUMBNAIL_MAX_EDGE } from '../config/constants'
+import { APP_DEPLOY_ID, APP_REVISION, APP_VERSION } from '../lib/appVersion'
 import { addPhotoToAlbum, createAlbum, listAlbums } from '../lib/db'
 import { formatDateTime } from '../lib/format'
 import { resizeImageToJpeg } from '../lib/image'
@@ -42,6 +46,7 @@ export const AlbumsPage = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const router = useIonRouter()
   const modal = useAppModal()
+  const menuTriggerId = 'albums-menu-trigger'
 
   const albumCountLabel = useMemo(() => {
     if (albums.length === 0) {
@@ -76,6 +81,14 @@ export const AlbumsPage = () => {
     fileInputRef.current?.click()
   }
 
+  const onShowVersionInfo = useCallback(async () => {
+    await modal.alert({
+      title: 'バージョン情報',
+      message: `version: ${APP_VERSION}\ndeploy: ${APP_DEPLOY_ID}\nhash: ${APP_REVISION}`,
+      confirmText: '閉じる',
+    })
+  }, [modal])
+
   const onCaptureNewAlbum = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const [file] = event.target.files ?? []
     event.target.value = ''
@@ -101,8 +114,11 @@ export const AlbumsPage = () => {
       setError(null)
 
       const album = await createAlbum(name)
-      const prepared = await resizeImageToJpeg(file, MAX_IMAGE_EDGE, JPEG_QUALITY)
-      await addPhotoToAlbum(album.id, prepared)
+      const [prepared, thumbnail] = await Promise.all([
+        resizeImageToJpeg(file, MAX_IMAGE_EDGE, JPEG_QUALITY),
+        resizeImageToJpeg(file, THUMBNAIL_MAX_EDGE, JPEG_QUALITY),
+      ])
+      await addPhotoToAlbum(album.id, prepared, thumbnail.blob)
 
       await loadAlbums(false)
       router.push(`/albums/${album.id}`, 'forward')
@@ -117,7 +133,12 @@ export const AlbumsPage = () => {
     <IonPage>
       <IonHeader translucent>
         <IonToolbar>
-          <IonTitle>Albums</IonTitle>
+          <IonButtons slot="start">
+            <IonButton id={menuTriggerId} fill="clear" aria-label="メニュー">
+              <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
+            </IonButton>
+          </IonButtons>
+          <IonTitle>Retro Vault</IonTitle>
         </IonToolbar>
       </IonHeader>
 
@@ -173,6 +194,20 @@ export const AlbumsPage = () => {
         capture="environment"
         onChange={onCaptureNewAlbum}
       />
+
+      <IonPopover trigger={menuTriggerId} dismissOnSelect className="album-menu-popover">
+        <IonList className="album-menu-list" lines="none">
+          <IonItem
+            button
+            detail={false}
+            onClick={() => {
+              void onShowVersionInfo()
+            }}
+          >
+            バージョン情報
+          </IonItem>
+        </IonList>
+      </IonPopover>
     </IonPage>
   )
 }
