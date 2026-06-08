@@ -8,81 +8,20 @@ import {
   IonToolbar,
   useIonRouter,
 } from '@ionic/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAppModal } from '../components/appModalContext'
-import { getAlbum, getPhotoById, updatePhotoMemo } from '../lib/db'
-import type { Album, Photo } from '../types'
+import { useAlbumMutations } from '../hooks/useAlbumMutations'
+import { usePhoto } from '../hooks/usePhoto'
 
 export const PhotoViewPage = () => {
   const { albumId, photoId } = useParams<{ albumId: string; photoId: string }>()
   const router = useIonRouter()
-  const invalidParams = !albumId || !photoId
-
-  const [album, setAlbum] = useState<Album | null>(null)
-  const [photo, setPhoto] = useState<Photo | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const modal = useAppModal()
-
-  useEffect(() => {
-    let cancelled = false
-
-    if (invalidParams) {
-      return () => {
-        cancelled = true
-      }
-    }
-
-    void Promise.all([getAlbum(albumId), getPhotoById(photoId)])
-      .then(([albumData, photoData]) => {
-        if (cancelled) {
-          return
-        }
-
-        if (!albumData || !photoData || photoData.albumId !== albumId) {
-          setError('画像が見つかりません。')
-          setAlbum(null)
-          setPhoto(null)
-          return
-        }
-
-        setError(null)
-        setAlbum(albumData)
-        setPhoto(photoData)
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : '画像の取得に失敗しました。')
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [albumId, photoId, invalidParams])
-
-  const photoUrl = useMemo(() => {
-    if (!photo) {
-      return null
-    }
-
-    return URL.createObjectURL(photo.blob)
-  }, [photo])
-
-  useEffect(() => {
-    return () => {
-      if (photoUrl) {
-        URL.revokeObjectURL(photoUrl)
-      }
-    }
-  }, [photoUrl])
+  const { savePhotoMemo } = useAlbumMutations()
+  const { album, photo, loading, error, photoUrl, invalidParams, setError, applyPhotoUpdate } =
+    usePhoto(albumId, photoId)
 
   const backToAlbum = () => {
     if (router.canGoBack()) {
@@ -91,11 +30,11 @@ export const PhotoViewPage = () => {
     }
 
     if (albumId) {
-      router.push(`/albums/${albumId}`, 'root')
+      router.push(`/albums/${albumId}`, 'root', 'replace')
       return
     }
 
-    router.push('/', 'root')
+    router.push('/', 'root', 'replace')
   }
 
   const onEditMemo = async () => {
@@ -117,8 +56,8 @@ export const PhotoViewPage = () => {
 
     try {
       setBusy(true)
-      const updated = await updatePhotoMemo(photo.id, value)
-      setPhoto(updated)
+      const updated = await savePhotoMemo(photo.id, value)
+      applyPhotoUpdate(updated)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'メモの保存に失敗しました。')
     } finally {

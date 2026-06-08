@@ -11,12 +11,17 @@
   --accent-gold-strong: #e19524;
   --accent-purple: #7d4dff;
   --shadow: 0 18px 48px rgba(5, 8, 19, 0.45);
+  --app-surface-bg:
+    radial-gradient(circle at 10% 12%, rgba(49, 247, 255, 0.22), transparent 38%),
+    radial-gradient(circle at 85% 10%, rgba(125, 77, 255, 0.24), transparent 40%),
+    radial-gradient(circle at 50% 100%, rgba(255, 187, 79, 0.16), transparent 45%),
+    linear-gradient(170deg, var(--paper), var(--paper-deep));
   --ion-color-primary: #ffbb4f;
   --ion-color-primary-rgb: 255, 187, 79;
   --ion-color-primary-contrast: #1b1207;
   --ion-color-primary-shade: #e6a943;
   --ion-color-primary-tint: #ffc461;
-  --ion-background-color: transparent;
+  --ion-background-color: var(--paper);
   --ion-text-color: #ecf8ff;
   --ion-font-family: 'Avenir Next', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
   font-family: 'Avenir Next', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
@@ -40,11 +45,7 @@ body,
 body {
   margin: 0;
   color: var(--ink-main);
-  background:
-    radial-gradient(circle at 10% 12%, rgba(49, 247, 255, 0.22), transparent 38%),
-    radial-gradient(circle at 85% 10%, rgba(125, 77, 255, 0.24), transparent 40%),
-    radial-gradient(circle at 50% 100%, rgba(255, 187, 79, 0.16), transparent 45%),
-    linear-gradient(170deg, var(--paper), var(--paper-deep));
+  background: var(--app-surface-bg);
 }
 
 #root {
@@ -52,7 +53,11 @@ body {
 }
 
 ion-app {
-  background: transparent;
+  background: var(--app-surface-bg);
+}
+
+ion-content {
+  --background: var(--app-surface-bg);
 }
 
 #root::before {

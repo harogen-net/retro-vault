@@ -21,11 +21,10 @@ import {
 import { add, ellipsisHorizontal } from 'ionicons/icons'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppModal } from '../components/appModalContext'
-import { JPEG_QUALITY, MAX_IMAGE_EDGE, THUMBNAIL_MAX_EDGE } from '../config/constants'
+import { useAlbumMutations } from '../hooks/useAlbumMutations'
 import { APP_DEPLOY_ID, APP_REVISION, APP_VERSION } from '../lib/appVersion'
-import { addPhotoToAlbum, createAlbum, listAlbums } from '../lib/db'
+import { listAlbums } from '../lib/db'
 import { formatDateTime } from '../lib/format'
-import { resizeImageToJpeg } from '../lib/image'
 import type { Album } from '../types'
 
 const defaultAlbumTitle = (): string => {
@@ -46,6 +45,7 @@ export const AlbumsPage = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const router = useIonRouter()
   const modal = useAppModal()
+  const { createAlbumWithInitialPhoto } = useAlbumMutations()
   const menuTriggerId = 'albums-menu-trigger'
 
   const albumCountLabel = useMemo(() => {
@@ -113,15 +113,10 @@ export const AlbumsPage = () => {
       setBusy(true)
       setError(null)
 
-      const album = await createAlbum(name)
-      const [prepared, thumbnail] = await Promise.all([
-        resizeImageToJpeg(file, MAX_IMAGE_EDGE, JPEG_QUALITY),
-        resizeImageToJpeg(file, THUMBNAIL_MAX_EDGE, JPEG_QUALITY),
-      ])
-      await addPhotoToAlbum(album.id, prepared, thumbnail.blob)
+      const album = await createAlbumWithInitialPhoto(name, file)
 
       await loadAlbums(false)
-      router.push(`/albums/${album.id}`, 'forward')
+      router.push(`/albums/${album.id}`, 'forward', 'push')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'アルバム作成に失敗しました。')
     } finally {
@@ -160,7 +155,7 @@ export const AlbumsPage = () => {
                   button
                   detail
                   onClick={() => {
-                    router.push(`/albums/${album.id}`, 'forward')
+                    router.push(`/albums/${album.id}`, 'forward', 'push')
                   }}
                 >
                   <IonLabel className="album-row">

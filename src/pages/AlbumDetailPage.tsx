@@ -1,48 +1,280 @@
 import {
-  IonActionSheet,
-  IonButton,
-  IonButtons,
-  IonCol,
-  IonContent,
-  IonFab,
-  IonFabButton,
-  IonFooter,
-  IonGrid,
-  IonHeader,
-  IonIcon,
-  IonItem,
-  IonList,
-  IonPage,
-  IonPopover,
-  IonRow,
-  IonText,
-  IonTitle,
-  IonToolbar,
-  useIonRouter,
-  useIonViewWillEnter,
+	IonActionSheet,
+	IonButton,
+	IonButtons,
+	IonCol,
+	IonContent,
+	IonFab,
+	IonFabButton,
+	IonFooter,
+	IonGrid,
+	IonHeader,
+	IonIcon,
+	IonItem,
+	IonList,
+	IonPage,
+	IonPopover,
+	IonRow,
+	IonText,
+	IonTitle,
+	IonToolbar,
+	useIonRouter,
+	useIonViewWillEnter,
 } from "@ionic/react";
 import { add, checkmarkCircle, ellipsisHorizontal } from "ionicons/icons";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
-import {
-  JPEG_QUALITY,
-  MAX_IMAGE_EDGE,
-  THUMBNAIL_MAX_EDGE,
-} from "../config/constants";
-import {
-  addPhotoToAlbum,
-  deleteAlbumWithPhotos,
-  deletePhotosFromAlbum,
-  getAlbum,
-  listAlbums,
-  listPhotosByAlbum,
-  movePhotosToAlbum,
-  renameAlbumTitle,
-} from "../lib/db";
+import { useAlbumMutations } from "../hooks/useAlbumMutations";
+import { getAlbum, listAlbums, listPhotosByAlbum } from "../lib/db";
 import { formatDateTime } from "../lib/format";
-import { resizeImageToJpeg } from "../lib/image";
 import type { Album, Photo } from "../types";
+
+type AlbumDetailBodyProps = {
+  loading: boolean;
+  album: Album | null;
+  error: string | null;
+  photoUrls: Array<{ id: string; src: string; createdAt: number; memo: string | undefined }>;
+  selectionMode: boolean;
+  selectedPhotoIds: string[];
+  onBackToAlbums: () => void;
+  onSelectPhoto: (photoId: string) => void;
+  onOpenPhoto: (photoId: string) => void;
+};
+
+type AlbumDetailOverlayProps = {
+  hasAlbum: boolean;
+  busy: boolean;
+  selectionMode: boolean;
+  menuTriggerId: string;
+  moveSheetOpen: boolean;
+  albumOptions: Album[];
+  onAddPhotoClick: () => void;
+  onRenameAlbum: () => Promise<void>;
+  onToggleSelectionMode: () => void;
+  onDeleteAlbum: () => Promise<void>;
+  onMoveSelected: (targetAlbumId: string) => Promise<void>;
+  onDismissMoveSheet: () => void;
+};
+
+type AlbumDetailFooterProps = {
+  hasAlbum: boolean;
+  selectionMode: boolean;
+  busy: boolean;
+  selectedPhotoIds: string[];
+  onOpenMoveSheet: () => Promise<void>;
+  onDeleteSelected: () => Promise<void>;
+  onToggleSelectionMode: () => void;
+};
+
+const AlbumDetailBody = ({
+  loading,
+  album,
+  error,
+  photoUrls,
+  selectionMode,
+  selectedPhotoIds,
+  onBackToAlbums,
+  onSelectPhoto,
+  onOpenPhoto,
+}: AlbumDetailBodyProps) => {
+  if (loading) {
+    return (
+      <section className="screen ion-padding">
+        <p className="state-text">読み込み中...</p>
+      </section>
+    );
+  }
+
+  if (!album) {
+    return (
+      <section className="screen ion-padding">
+        <p className="error-banner">{error ?? "アルバムが見つかりません。"}</p>
+        <button
+          type="button"
+          className="back-link back-button"
+          onClick={onBackToAlbums}
+        >
+          一覧へ戻る
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="screen ion-padding">
+      <section className="detail-meta" aria-label="アルバムメタ情報">
+        <IonText className="meta-line">作成: {formatDateTime(album.createdAt)}</IonText>
+        <IonText className="meta-line">更新: {formatDateTime(album.updatedAt)}</IonText>
+        <IonText className="meta-line">画像: {album.photoCount}枚</IonText>
+      </section>
+
+      {error && <p className="error-banner">{error}</p>}
+
+      {photoUrls.length === 0 ? (
+        <p className="state-text">まだ画像がありません。上のボタンから追加できます。</p>
+      ) : (
+        <IonGrid className="tiles" aria-label="撮影画像一覧">
+          <IonRow>
+            {photoUrls.map((photo) => (
+              <IonCol key={photo.id} size="6" sizeMd="4" sizeLg="3">
+                <button
+                  type="button"
+                  className={`tile-button ${selectedPhotoIds.includes(photo.id) ? "is-selected" : ""}`}
+                  onClick={() => {
+                    if (selectionMode) {
+                      onSelectPhoto(photo.id);
+                      return;
+                    }
+
+                    onOpenPhoto(photo.id);
+                  }}
+                >
+                  <article className="tile">
+                    <img
+                      src={photo.src}
+                      alt="撮影画像"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <p>{formatDateTime(photo.createdAt)}</p>
+                    {photo.memo && <p className="tile-memo">{photo.memo}</p>}
+                    {selectionMode && (
+                      <span className="tile-checkmark" aria-hidden="true">
+                        <IonIcon icon={checkmarkCircle} />
+                      </span>
+                    )}
+                  </article>
+                </button>
+              </IonCol>
+            ))}
+          </IonRow>
+        </IonGrid>
+      )}
+    </section>
+  );
+};
+
+const AlbumDetailOverlay = ({
+  hasAlbum,
+  busy,
+  selectionMode,
+  menuTriggerId,
+  moveSheetOpen,
+  albumOptions,
+  onAddPhotoClick,
+  onRenameAlbum,
+  onToggleSelectionMode,
+  onDeleteAlbum,
+  onMoveSelected,
+  onDismissMoveSheet,
+}: AlbumDetailOverlayProps) => {
+  if (!hasAlbum) {
+    return null;
+  }
+
+  return (
+    <>
+      <IonFab slot="fixed" vertical="bottom" horizontal="end">
+        <IonFabButton
+          onClick={onAddPhotoClick}
+          disabled={busy}
+          aria-label="画像を追加"
+        >
+          {busy ? "..." : <IonIcon icon={add} />}
+        </IonFabButton>
+      </IonFab>
+
+      <IonPopover
+        trigger={menuTriggerId}
+        triggerAction="click"
+        side="bottom"
+        alignment="end"
+        showBackdrop={false}
+        dismissOnSelect
+        className="album-menu-popover"
+      >
+        <IonList className="album-menu-list">
+          <IonItem button onClick={() => void onRenameAlbum()}>
+            アルバム名変更
+          </IonItem>
+          <IonItem button onClick={onToggleSelectionMode}>
+            {selectionMode ? "選択モード終了" : "選択モード開始"}
+          </IonItem>
+          <IonItem button onClick={() => void onDeleteAlbum()}>
+            アルバム削除
+          </IonItem>
+        </IonList>
+      </IonPopover>
+
+      <IonActionSheet
+        isOpen={moveSheetOpen}
+        onDidDismiss={onDismissMoveSheet}
+        header="移動先アルバムを選択"
+        buttons={[
+          ...albumOptions.map((option) => ({
+            text: option.title,
+            handler: () => {
+              void onMoveSelected(option.id);
+            },
+          })),
+          {
+            text: "キャンセル",
+            role: "cancel" as const,
+          },
+        ]}
+      />
+    </>
+  );
+};
+
+const AlbumDetailFooter = ({
+  hasAlbum,
+  selectionMode,
+  busy,
+  selectedPhotoIds,
+  onOpenMoveSheet,
+  onDeleteSelected,
+  onToggleSelectionMode,
+}: AlbumDetailFooterProps) => {
+  if (!hasAlbum || !selectionMode) {
+    return null;
+  }
+
+  return (
+    <IonFooter>
+      <IonToolbar>
+        <div className="selection-actions">
+          <span>{selectedPhotoIds.length}件選択中</span>
+          <div className="selection-actions-buttons">
+            <IonButton
+              fill="clear"
+              onClick={() => void onOpenMoveSheet()}
+              disabled={busy || selectedPhotoIds.length === 0}
+            >
+              移動
+            </IonButton>
+            <IonButton
+              fill="clear"
+              color="danger"
+              onClick={() => void onDeleteSelected()}
+              disabled={busy || selectedPhotoIds.length === 0}
+            >
+              削除
+            </IonButton>
+            <IonButton
+              fill="clear"
+              onClick={onToggleSelectionMode}
+              disabled={busy}
+            >
+              完了
+            </IonButton>
+          </div>
+        </div>
+      </IonToolbar>
+    </IonFooter>
+  );
+};
 
 export const AlbumDetailPage = () => {
   const { albumId } = useParams<{ albumId: string }>();
@@ -60,6 +292,13 @@ export const AlbumDetailPage = () => {
   const router = useIonRouter();
   const menuTriggerId = "album-detail-menu-trigger";
   const modal = useAppModal();
+  const {
+    addPhotoFromFile,
+    deleteAlbum,
+    deletePhotos,
+    movePhotos,
+    renameAlbum,
+  } = useAlbumMutations();
 
   const backToAlbums = () => {
     if (router.canGoBack()) {
@@ -67,10 +306,10 @@ export const AlbumDetailPage = () => {
       return;
     }
 
-    router.push("/", "root");
+    router.push("/", "root", "replace");
   };
 
-  const fetchAlbumData = async (id: string) => {
+  const fetchAlbumData = useCallback(async (id: string) => {
     const [albumData, photoData] = await Promise.all([
       getAlbum(id),
       listPhotosByAlbum(id),
@@ -84,60 +323,44 @@ export const AlbumDetailPage = () => {
       albumData,
       photoData,
     };
-  };
+  }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadAlbum = useCallback(
+    async (id: string, showLoading: boolean) => {
+      if (showLoading) {
+        setLoading(true);
+      }
 
-    if (!albumId) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    void fetchAlbumData(albumId)
-      .then(({ albumData, photoData }) => {
-        if (cancelled) {
-          return;
-        }
-
-        setError(null);
+      try {
+        const { albumData, photoData } = await fetchAlbumData(id);
         setAlbum(albumData);
         setPhotos(photoData);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(
-            e instanceof Error
-              ? e.message
-              : "アルバム詳細の取得に失敗しました。",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
+        setError(null);
+      } catch (e) {
+        setAlbum(null);
+        setPhotos([]);
+        setError(
+          e instanceof Error ? e.message : "アルバム詳細の取得に失敗しました。",
+        );
+      } finally {
+        if (showLoading) {
           setLoading(false);
         }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [albumId]);
+      }
+    },
+    [fetchAlbumData],
+  );
 
   useIonViewWillEnter(() => {
     if (!albumId) {
+      setAlbum(null);
+      setPhotos([]);
+      setError("アルバムIDが不正です。");
+      setLoading(false);
       return;
     }
 
-    void fetchAlbumData(albumId)
-      .then(({ albumData, photoData }) => {
-        setAlbum(albumData);
-        setPhotos(photoData);
-      })
-      .catch(() => {
-        // サイレントフェール。初回ロードエラーは useEffect で表示済み
-      });
+    void loadAlbum(albumId, true);
   });
 
   const photoUrls = useMemo(() => {
@@ -159,18 +382,6 @@ export const AlbumDetailPage = () => {
       createdAt: photo.createdAt,
       memo: photo.memo,
     }));
-  }, [photos]);
-
-  useEffect(() => {
-    const currentIds = new Set(photos.map((photo) => photo.id));
-    const urlMap = photoUrlMapRef.current;
-
-    for (const [photoId, photoUrl] of urlMap.entries()) {
-      if (!currentIds.has(photoId)) {
-        URL.revokeObjectURL(photoUrl);
-        urlMap.delete(photoId);
-      }
-    }
   }, [photos]);
 
   useEffect(() => {
@@ -208,7 +419,7 @@ export const AlbumDetailPage = () => {
     try {
       setBusy(true);
       setError(null);
-      const updatedAlbum = await renameAlbumTitle(album.id, title);
+      const updatedAlbum = await renameAlbum(album.id, title);
       setAlbum(updatedAlbum);
     } catch (e) {
       setError(
@@ -230,14 +441,8 @@ export const AlbumDetailPage = () => {
     try {
       setBusy(true);
       setError(null);
-      const [prepared, thumbnail] = await Promise.all([
-        resizeImageToJpeg(file, MAX_IMAGE_EDGE, JPEG_QUALITY),
-        resizeImageToJpeg(file, THUMBNAIL_MAX_EDGE, JPEG_QUALITY),
-      ]);
-      await addPhotoToAlbum(albumId, prepared, thumbnail.blob);
-      const { albumData, photoData } = await fetchAlbumData(albumId);
-      setAlbum(albumData);
-      setPhotos(photoData);
+      await addPhotoFromFile(albumId, file);
+      await loadAlbum(albumId, false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "画像追加に失敗しました。");
     } finally {
@@ -283,10 +488,8 @@ export const AlbumDetailPage = () => {
     try {
       setBusy(true);
       setError(null);
-      await deletePhotosFromAlbum(album.id, selectedPhotoIds);
-      const { albumData, photoData } = await fetchAlbumData(album.id);
-      setAlbum(albumData);
-      setPhotos(photoData);
+      await deletePhotos(album.id, selectedPhotoIds);
+      await loadAlbum(album.id, false);
       setSelectedPhotoIds([]);
       setSelectionMode(false);
     } catch (e) {
@@ -326,10 +529,8 @@ export const AlbumDetailPage = () => {
     try {
       setBusy(true);
       setError(null);
-      await movePhotosToAlbum(album.id, targetAlbumId, selectedPhotoIds);
-      const { albumData, photoData } = await fetchAlbumData(album.id);
-      setAlbum(albumData);
-      setPhotos(photoData);
+      await movePhotos(album.id, targetAlbumId, selectedPhotoIds);
+      await loadAlbum(album.id, false);
       setSelectedPhotoIds([]);
       setSelectionMode(false);
     } catch (e) {
@@ -357,7 +558,7 @@ export const AlbumDetailPage = () => {
     try {
       setBusy(true);
       setError(null);
-      await deleteAlbumWithPhotos(album.id);
+      await deleteAlbum(album.id);
       backToAlbums();
     } catch (e) {
       setError(e instanceof Error ? e.message : "アルバム削除に失敗しました。");
@@ -366,215 +567,73 @@ export const AlbumDetailPage = () => {
     }
   };
 
-  if (loading) {
-    if (!albumId) {
-      return (
-        <main className="screen">
-          <p className="error-banner">アルバムIDが不正です。</p>
-          <button
-            type="button"
-            className="back-link back-button"
-            onClick={backToAlbums}
-          >
-            一覧へ戻る
-          </button>
-        </main>
-      );
+  const hasAlbum = !!album;
+  const onOpenPhoto = (photoId: string) => {
+    if (!album) {
+      return;
     }
 
-    return (
-      <IonPage>
-        <IonContent className="ion-padding">
-          <p className="state-text">読み込み中...</p>
-        </IonContent>
-      </IonPage>
-    );
-  }
-
-  if (!album) {
-    return (
-      <IonPage>
-        <IonContent className="ion-padding">
-          <p className="error-banner">
-            {error ?? "アルバムが見つかりません。"}
-          </p>
-          <button
-            type="button"
-            className="back-link back-button"
-            onClick={backToAlbums}
-          >
-            一覧へ戻る
-          </button>
-        </IonContent>
-      </IonPage>
-    );
-  }
+    router.push(`/albums/${album.id}/photos/${photoId}`, "forward", "push");
+  };
 
   return (
     <IonPage>
-      <IonHeader translucent>
-        <IonToolbar>
-          <IonButtons slot="start">
-            <IonButton fill="clear" onClick={backToAlbums}>
-              一覧
-            </IonButton>
-          </IonButtons>
-          <IonTitle>{album.title}</IonTitle>
-          <IonButtons slot="end">
-            <IonButton id={menuTriggerId} fill="clear" disabled={busy}>
-              <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
-            </IonButton>
-          </IonButtons>
-        </IonToolbar>
-      </IonHeader>
+      {hasAlbum && (
+        <IonHeader translucent>
+          <IonToolbar>
+            <IonButtons slot="start">
+              <IonButton fill="clear" onClick={backToAlbums}>
+                一覧
+              </IonButton>
+            </IonButtons>
+            <IonTitle>{album.title}</IonTitle>
+            <IonButtons slot="end">
+              <IonButton id={menuTriggerId} fill="clear" disabled={busy}>
+                <IonIcon slot="icon-only" icon={ellipsisHorizontal} />
+              </IonButton>
+            </IonButtons>
+          </IonToolbar>
+        </IonHeader>
+      )}
 
       <IonContent fullscreen>
-        <section className="screen ion-padding">
-          <section className="detail-meta" aria-label="アルバムメタ情報">
-            <IonText className="meta-line">
-              作成: {formatDateTime(album.createdAt)}
-            </IonText>
-            <IonText className="meta-line">
-              更新: {formatDateTime(album.updatedAt)}
-            </IonText>
-            <IonText className="meta-line">画像: {album.photoCount}枚</IonText>
-          </section>
+        <AlbumDetailBody
+          loading={loading}
+          album={album}
+          error={error}
+          photoUrls={photoUrls}
+          selectionMode={selectionMode}
+          selectedPhotoIds={selectedPhotoIds}
+          onBackToAlbums={backToAlbums}
+          onSelectPhoto={toggleSelectPhoto}
+          onOpenPhoto={onOpenPhoto}
+        />
 
-          {error && <p className="error-banner">{error}</p>}
-
-          {photoUrls.length === 0 ? (
-            <p className="state-text">
-              まだ画像がありません。上のボタンから追加できます。
-            </p>
-          ) : (
-            <IonGrid className="tiles" aria-label="撮影画像一覧">
-              <IonRow>
-                {photoUrls.map((photo) => (
-                  <IonCol key={photo.id} size="6" sizeMd="4" sizeLg="3">
-                    <button
-                      type="button"
-                      className={`tile-button ${selectedPhotoIds.includes(photo.id) ? "is-selected" : ""}`}
-                      onClick={() => {
-                        if (selectionMode) {
-                          toggleSelectPhoto(photo.id);
-                          return;
-                        }
-
-                        router.push(
-                          `/albums/${album.id}/photos/${photo.id}`,
-                          "forward",
-                        );
-                      }}
-                    >
-                      <article className="tile">
-                        <img
-                          src={photo.src}
-                          alt="撮影画像"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        <p>{formatDateTime(photo.createdAt)}</p>
-                        {photo.memo && (
-                          <p className="tile-memo">{photo.memo}</p>
-                        )}
-                        {selectionMode && (
-                          <span className="tile-checkmark" aria-hidden="true">
-                            <IonIcon icon={checkmarkCircle} />
-                          </span>
-                        )}
-                      </article>
-                    </button>
-                  </IonCol>
-                ))}
-              </IonRow>
-            </IonGrid>
-          )}
-        </section>
-
-        <IonFab slot="fixed" vertical="bottom" horizontal="end">
-          <IonFabButton
-            onClick={onAddPhotoClick}
-            disabled={busy}
-            aria-label="画像を追加"
-          >
-            {busy ? "..." : <IonIcon icon={add} />}
-          </IonFabButton>
-        </IonFab>
-
-        <IonPopover
-          trigger={menuTriggerId}
-          triggerAction="click"
-          side="bottom"
-          alignment="end"
-          showBackdrop={false}
-          dismissOnSelect
-          className="album-menu-popover"
-        >
-          <IonList className="album-menu-list">
-            <IonItem button onClick={() => void onRenameAlbum()}>
-              アルバム名変更
-            </IonItem>
-            <IonItem button onClick={toggleSelectionMode}>
-              {selectionMode ? "選択モード終了" : "選択モード開始"}
-            </IonItem>
-            <IonItem button onClick={() => void onDeleteAlbum()}>
-              アルバム削除
-            </IonItem>
-          </IonList>
-        </IonPopover>
-
-        <IonActionSheet
-          isOpen={moveSheetOpen}
-          onDidDismiss={() => setMoveSheetOpen(false)}
-          header="移動先アルバムを選択"
-          buttons={[
-            ...albumOptions.map((option) => ({
-              text: option.title,
-              handler: () => {
-                void onMoveSelected(option.id);
-              },
-            })),
-            {
-              text: "キャンセル",
-              role: "cancel" as const,
-            },
-          ]}
+        <AlbumDetailOverlay
+          hasAlbum={hasAlbum}
+          busy={busy}
+          selectionMode={selectionMode}
+          menuTriggerId={menuTriggerId}
+          moveSheetOpen={moveSheetOpen}
+          albumOptions={albumOptions}
+          onAddPhotoClick={onAddPhotoClick}
+          onRenameAlbum={onRenameAlbum}
+          onToggleSelectionMode={toggleSelectionMode}
+          onDeleteAlbum={onDeleteAlbum}
+          onMoveSelected={onMoveSelected}
+          onDismissMoveSheet={() => setMoveSheetOpen(false)}
         />
       </IonContent>
 
-      {selectionMode && (
-        <IonFooter>
-          <IonToolbar>
-            <div className="selection-actions">
-              <span>{selectedPhotoIds.length}件選択中</span>
-              <div className="selection-actions-buttons">
-                <IonButton
-                  fill="clear"
-                  onClick={() => void onOpenMoveSheet()}
-                  disabled={busy || selectedPhotoIds.length === 0}
-                >
-                  移動
-                </IonButton>
-                <IonButton
-                  fill="clear"
-                  color="danger"
-                  onClick={() => void onDeleteSelected()}
-                  disabled={busy || selectedPhotoIds.length === 0}
-                >
-                  削除
-                </IonButton>
-                <IonButton
-                  fill="clear"
-                  onClick={toggleSelectionMode}
-                  disabled={busy}
-                >
-                  完了
-                </IonButton>
-              </div>
-            </div>
-          </IonToolbar>
-        </IonFooter>
-      )}
+      <AlbumDetailFooter
+        hasAlbum={hasAlbum}
+        selectionMode={selectionMode}
+        busy={busy}
+        selectedPhotoIds={selectedPhotoIds}
+        onOpenMoveSheet={onOpenMoveSheet}
+        onDeleteSelected={onDeleteSelected}
+        onToggleSelectionMode={toggleSelectionMode}
+      />
 
       <input
         ref={fileInputRef}
