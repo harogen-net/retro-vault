@@ -1,12 +1,12 @@
 import {
-  IonButton,
-  IonButtons,
-  IonContent,
-  IonHeader,
-  IonPage,
-  IonTitle,
-  IonToolbar,
-  useIonRouter,
+    IonButton,
+    IonButtons,
+    IonContent,
+    IonHeader,
+    IonPage,
+    IonTitle,
+    IonToolbar,
+    useIonRouter,
 } from '@ionic/react'
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
@@ -65,75 +65,59 @@ export const PhotoViewPage = () => {
     }
   }
 
-  if (loading) {
-    if (invalidParams) {
-      return (
-        <IonPage>
-          <IonContent className="ion-padding">
-            <p className="error-banner">画像IDが不正です。</p>
-            <button type="button" className="back-link back-button" onClick={backToAlbum}>
-              アルバムへ戻る
-            </button>
-          </IonContent>
-        </IonPage>
-      )
-    }
-
-    return (
-      <IonPage>
-        <IonContent className="ion-padding">
-          <p className="state-text">読み込み中...</p>
-        </IonContent>
-      </IonPage>
-    )
-  }
-
-  if (!photo || !photoUrl) {
-    return (
-      <IonPage>
-        <IonContent className="ion-padding">
-          <p className="error-banner">{error ?? '画像が見つかりません。'}</p>
-          <button type="button" className="back-link back-button" onClick={backToAlbum}>
-            アルバムへ戻る
-          </button>
-        </IonContent>
-      </IonPage>
-    )
-  }
+  const hasPhoto = !loading && !!photo && !!photoUrl
+  const errorMessage = invalidParams ? '画像IDが不正です。' : error ?? '画像が見つかりません。'
 
   return (
     <IonPage className="photo-view-page">
-      <IonHeader translucent>
-        <IonToolbar className="photo-toolbar">
-          <IonButtons slot="start">
-            <IonButton fill="clear" onClick={backToAlbum}>
-              戻る
-            </IonButton>
-          </IonButtons>
-          <IonTitle>{album?.title ?? 'Photo'}</IonTitle>
-          <IonButtons slot="end">
-            <IonButton fill="clear" onClick={() => void onEditMemo()} disabled={busy}>
-              メモ
-            </IonButton>
-          </IonButtons>
-        </IonToolbar>
-      </IonHeader>
+      {hasPhoto && (
+        <IonHeader translucent>
+          <IonToolbar className="photo-toolbar">
+            <IonButtons slot="start">
+              <IonButton fill="clear" onClick={backToAlbum}>
+                戻る
+              </IonButton>
+            </IonButtons>
+            <IonTitle>{album?.title ?? 'Photo'}</IonTitle>
+            <IonButtons slot="end">
+              <IonButton fill="clear" onClick={() => void onEditMemo()} disabled={busy}>
+                メモ
+              </IonButton>
+            </IonButtons>
+          </IonToolbar>
+        </IonHeader>
+      )}
 
-      <IonContent fullscreen scrollY={false} className="photo-content">
-        <section className="photo-stage">
-          <img
-            src={photoUrl}
-            alt="撮影画像の拡大表示"
-            className="photo-fullscreen"
-            decoding="async"
-          />
-          {photo?.memo && (
-            <div className="photo-memo">
-              <p className="photo-memo-text">{photo.memo}</p>
-            </div>
-          )}
-          {error && <p className="error-banner photo-error">{error}</p>}
-        </section>
+      <IonContent
+        fullscreen={hasPhoto}
+        scrollY={!hasPhoto}
+        className={hasPhoto ? 'photo-content' : 'ion-padding'}
+      >
+        {loading ? (
+          <p className="state-text">読み込み中...</p>
+        ) : hasPhoto ? (
+          <section className="photo-stage">
+            <img
+              src={photoUrl}
+              alt="撮影画像の拡大表示"
+              className="photo-fullscreen"
+              decoding="async"
+            />
+            {photo.memo && (
+              <div className="photo-memo">
+                <p className="photo-memo-text">{photo.memo}</p>
+              </div>
+            )}
+            {error && <p className="error-banner photo-error">{error}</p>}
+          </section>
+        ) : (
+          <>
+            <p className="error-banner">{errorMessage}</p>
+            <button type="button" className="back-link back-button" onClick={backToAlbum}>
+              アルバムへ戻る
+            </button>
+          </>
+        )}
       </IonContent>
     </IonPage>
   )
