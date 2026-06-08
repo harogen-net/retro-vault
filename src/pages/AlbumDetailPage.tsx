@@ -22,7 +22,7 @@ import {
 	useIonViewWillEnter,
 } from "@ionic/react";
 import { add, checkmarkCircle, ellipsisHorizontal } from "ionicons/icons";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
 import { useAlbumMutations } from "../hooks/useAlbumMutations";
@@ -266,8 +266,10 @@ export const AlbumDetailPage = () => {
 	const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
 	const [albumOptions, setAlbumOptions] = useState<Album[]>([]);
 	const [moveSheetOpen, setMoveSheetOpen] = useState(false);
+	const [photoUrls, setPhotoUrls] = useState<
+		Array<{ id: string; src: string; createdAt: number; memo: string | undefined }>
+	>([]);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
-	const photoUrlMapRef = useRef<Map<string, string>>(new Map());
 	const router = useIonRouter();
 	const menuTriggerId = "album-detail-menu-trigger";
 	const modal = useAppModal();
@@ -332,35 +334,60 @@ export const AlbumDetailPage = () => {
 		void loadAlbum(albumId, true);
 	});
 
-	const photoUrls = useMemo(() => {
-		const urlMap = photoUrlMapRef.current;
+	const blobToDataUrl = useCallback((blob: Blob, mimeType?: string) => {
+		return new Promise<string>((resolve, reject) => {
+			const safeBlob = blob.type ? blob : new Blob([blob], { type: mimeType || "image/jpeg" });
+			const reader = new FileReader();
 
-		return photos.map((photo) => ({
-			id: photo.id,
-			src: (() => {
-				const cached = urlMap.get(photo.id);
-				if (cached) {
-					return cached;
+			reader.onload = () => {
+				if (typeof reader.result === "string") {
+					resolve(reader.result);
+					return;
 				}
 
-				const sourceBlob = photo.thumbnailBlob ?? photo.blob;
-				const created = URL.createObjectURL(sourceBlob);
-				urlMap.set(photo.id, created);
-				return created;
-			})(),
-			createdAt: photo.createdAt,
-			memo: photo.memo,
-		}));
-	}, [photos]);
+				reject(new Error("サムネイル変換に失敗しました。"));
+			};
+
+			reader.onerror = () => reject(reader.error ?? new Error("サムネイル変換に失敗しました。"));
+			reader.readAsDataURL(safeBlob);
+		});
+	}, []);
 
 	useEffect(() => {
-		return () => {
-			for (const photoUrl of photoUrlMapRef.current.values()) {
-				URL.revokeObjectURL(photoUrl);
+		let cancelled = false;
+
+		const loadPhotoUrls = async () => {
+			const next: Array<{ id: string; src: string; createdAt: number; memo: string | undefined }> = [];
+
+			for (const photo of photos) {
+				if (!photo.thumbnailBlob) {
+					continue;
+				}
+
+				try {
+					const src = await blobToDataUrl(photo.thumbnailBlob, photo.mimeType);
+					next.push({
+						id: photo.id,
+						src,
+						createdAt: photo.createdAt,
+						memo: photo.memo,
+					});
+				} catch {
+					// Skip broken image while keeping list rendering.
+				}
 			}
-			photoUrlMapRef.current.clear();
+
+			if (!cancelled) {
+				setPhotoUrls(next);
+			}
 		};
-	}, []);
+
+		void loadPhotoUrls();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [photos, blobToDataUrl]);
 
 	const onAddPhotoClick = () => {
 		fileInputRef.current?.click();
@@ -538,7 +565,11 @@ export const AlbumDetailPage = () => {
 			return;
 		}
 
-		router.push(`/albums/${album.id}/photos/${photoId}`, "forward", "push");
+		router.push(
+			`/albums/${encodeURIComponent(album.id)}/photos/${encodeURIComponent(photoId)}`,
+			"forward",
+			"push"
+		);
 	};
 
 	return (

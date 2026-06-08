@@ -298,10 +298,40 @@ export const listImagesByPhoto = async (photoId: string): Promise<PhotoImage[]> 
 	const imageStore = tx.objectStore(PHOTO_IMAGE_STORE);
 	const imageByPhotoCreatedAtIndex = imageStore.index("by_photo_createdAt");
 	const range = IDBKeyRange.bound([photoId, 0], [photoId, Number.MAX_SAFE_INTEGER]);
-	const images = (await toPromise(imageByPhotoCreatedAtIndex.getAll(range))) as PhotoImage[];
-	await completeTx(tx);
 
-	return images.sort((a, b) => b.createdAt - a.createdAt);
+	// Safari で getAll + Blob 参照が壊れることがあるため、primaryKey を列挙して 1 件ずつ get する
+	const primaryKeys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+		const keys: IDBValidKey[] = [];
+		const request = imageByPhotoCreatedAtIndex.openKeyCursor(range, "prev");
+
+		request.onsuccess = () => {
+			const cursor = request.result;
+			if (!cursor) {
+				resolve(keys);
+				return;
+			}
+
+			keys.push(cursor.primaryKey);
+			cursor.continue();
+		};
+
+		request.onerror = () => {
+			reject(request.error ?? new Error("画像キーの取得に失敗しました。"));
+		};
+	});
+
+	const images: PhotoImage[] = [];
+	for (const key of primaryKeys) {
+		const image = (await toPromise(imageStore.get(key))) as PhotoImage | undefined;
+		if (!image) {
+			continue;
+		}
+
+		images.push(image);
+	}
+
+	await completeTx(tx);
+	return images;
 };
 
 export const addPhotoToAlbum = async (

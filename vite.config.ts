@@ -54,9 +54,11 @@ export default defineConfig(({ mode }) => {
 					name: "Retro Vault",
 					short_name: "RetroVault",
 					description: "Retro-styled offline photo vault application",
+					lang: "ja",
 					theme_color: "#0e1422",
 					background_color: "#0e1422",
 					display: "standalone",
+					display_override: ["standalone", "minimal-ui"],
 					start_url: base,
 					scope: base,
 					icons: [

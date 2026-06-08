@@ -1,14 +1,14 @@
 import { useCallback } from "react";
 import { JPEG_QUALITY, MAX_IMAGE_EDGE, THUMBNAIL_MAX_EDGE } from "../config/constants";
 import {
-	addImageToPhoto,
-	addPhotoToAlbum,
-	createAlbum,
-	deleteAlbumWithPhotos,
-	deletePhotosFromAlbum,
-	movePhotosToAlbum,
-	renameAlbumTitle,
-	updatePhotoMemo,
+  addImageToPhoto,
+  addPhotoToAlbum,
+  createAlbum,
+  deleteAlbumWithPhotos,
+  deletePhotosFromAlbum,
+  movePhotosToAlbum,
+  renameAlbumTitle,
+  updatePhotoMemo,
 } from "../lib/db";
 import { resizeImageToJpeg } from "../lib/image";
 

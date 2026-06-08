@@ -1,22 +1,22 @@
 import {
-	IonButton,
-	IonButtons,
-	IonContent,
-	IonFab,
-	IonFabButton,
-	IonHeader,
-	IonIcon,
-	IonItem,
-	IonLabel,
-	IonList,
-	IonNote,
-	IonPage,
-	IonPopover,
-	IonText,
-	IonTitle,
-	IonToolbar,
-	useIonRouter,
-	useIonViewWillEnter,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonFab,
+  IonFabButton,
+  IonHeader,
+  IonIcon,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonNote,
+  IonPage,
+  IonPopover,
+  IonText,
+  IonTitle,
+  IonToolbar,
+  useIonRouter,
+  useIonViewWillEnter,
 } from "@ionic/react";
 import { add, ellipsisHorizontal } from "ionicons/icons";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -115,10 +115,13 @@ export const AlbumsPage = () => {
 			setError(null);
 
 			const album = await createAlbumWithPhotos(albumName, session.files);
+			if (!album.id) {
+				throw new Error("アルバムIDの生成に失敗しました。");
+			}
 
 			await loadAlbums(false);
 			resetCaptureSession();
-			router.push(`/albums/${album.id}`, "forward", "push");
+			router.push(`/albums/${encodeURIComponent(album.id)}`, "forward", "push");
 		} catch (e) {
 			setError(e instanceof Error ? e.message : "アルバム作成に失敗しました。");
 			resetCaptureSession();
@@ -140,6 +143,47 @@ export const AlbumsPage = () => {
 			message: `version: ${APP_VERSION}\ndeploy: ${APP_DEPLOY_ID}\nhash: ${APP_REVISION}`,
 			confirmText: "閉じる",
 		});
+	}, [modal]);
+
+	const onReloadApp = useCallback(async () => {
+		const shouldReload = await modal.confirm({
+			title: "アプリのリロード",
+			message: "最新状態を取得するためにアプリを再読み込みします。実行しますか？",
+			confirmText: "リロード",
+			cancelText: "キャンセル",
+		});
+
+		if (!shouldReload) {
+			return;
+		}
+
+		try {
+			if ("serviceWorker" in navigator) {
+				const registrations = await navigator.serviceWorker.getRegistrations();
+				await Promise.all(
+					registrations.map(async (registration) => {
+						try {
+							await registration.update();
+							registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+							await registration.unregister();
+						} catch {
+							// Ignore update failures and continue with reload.
+						}
+					})
+				);
+			}
+
+			if ("caches" in window) {
+				const cacheKeys = await caches.keys();
+				await Promise.all(cacheKeys.map((cacheKey) => caches.delete(cacheKey)));
+			}
+
+			const reloadUrl = new URL(window.location.href);
+			reloadUrl.searchParams.set("app_reload", String(Date.now()));
+			window.location.assign(reloadUrl.toString());
+		} catch {
+			window.location.reload();
+		}
 	}, [modal]);
 
 	const onCaptureNewAlbum = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -211,7 +255,11 @@ export const AlbumsPage = () => {
 									button
 									detail
 									onClick={() => {
-										router.push(`/albums/${album.id}`, "forward", "push");
+										router.push(
+											`/albums/${encodeURIComponent(album.id)}`,
+											"forward",
+											"push"
+										);
 									}}>
 									<IonLabel className="album-row">
 										<h2 className="album-title">{album.title}</h2>
@@ -253,6 +301,14 @@ export const AlbumsPage = () => {
 							void onShowVersionInfo();
 						}}>
 						バージョン情報
+					</IonItem>
+					<IonItem
+						button
+						detail={false}
+						onClick={() => {
+							void onReloadApp();
+						}}>
+						アプリのリロード
 					</IonItem>
 				</IonList>
 			</IonPopover>

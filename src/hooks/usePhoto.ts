@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getAlbum, getPhotoById, listImagesByPhoto } from "../lib/db";
 import type { Album, Photo, PhotoImage } from "../types";
 
@@ -11,6 +11,7 @@ export const usePhoto = (albumId?: string, photoId?: string) => {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [reloadSeq, setReloadSeq] = useState(0);
+	const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -63,21 +64,44 @@ export const usePhoto = (albumId?: string, photoId?: string) => {
 		};
 	}, [albumId, photoId, invalidParams, reloadSeq]);
 
-	const photoUrl = useMemo(() => {
-		if (!photo) {
-			return null;
+	useEffect(() => {
+		if (!photo?.blob) {
+			setPhotoUrl(null);
+			return;
 		}
 
-		return URL.createObjectURL(photo.blob);
-	}, [photo]);
+		const sourceBlob = photo.blob;
+		const safeBlob = sourceBlob.type
+			? sourceBlob
+			: new Blob([sourceBlob], { type: photo.mimeType || "image/jpeg" });
+		let cancelled = false;
+		const reader = new FileReader();
 
-	useEffect(() => {
-		return () => {
-			if (photoUrl) {
-				URL.revokeObjectURL(photoUrl);
+		reader.onload = () => {
+			if (cancelled) {
+				return;
+			}
+
+			if (typeof reader.result === "string") {
+				setPhotoUrl(reader.result);
+			} else {
+				setPhotoUrl(null);
 			}
 		};
-	}, [photoUrl]);
+
+		reader.onerror = () => {
+			if (!cancelled) {
+				setPhotoUrl(null);
+			}
+		};
+
+		reader.readAsDataURL(safeBlob);
+
+		return () => {
+			cancelled = true;
+			reader.abort();
+		};
+	}, [photo]);
 
 	const applyPhotoUpdate = useCallback((updated: Photo) => {
 		setPhoto(updated);

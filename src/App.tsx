@@ -1,5 +1,5 @@
 import { IonApp, IonRouterOutlet } from "@ionic/react";
-import { IonReactRouter } from "@ionic/react-router";
+import { IonReactHashRouter } from "@ionic/react-router";
 import { Redirect, Route } from "react-router-dom";
 import "./App.css";
 import { AppModalProvider } from "./components/AppModalProvider";
@@ -10,7 +10,7 @@ import { PhotoViewPage } from "./pages/PhotoViewPage";
 function App() {
 	return (
 		<IonApp>
-			<IonReactRouter>
+			<IonReactHashRouter>
 				<AppModalProvider>
 					<IonRouterOutlet animated>
 						<Route path="/" component={AlbumsPage} exact />
@@ -19,7 +19,7 @@ function App() {
 						<Route render={() => <Redirect to="/" />} />
 					</IonRouterOutlet>
 				</AppModalProvider>
-			</IonReactRouter>
+			</IonReactHashRouter>
 		</IonApp>
 	);
 }

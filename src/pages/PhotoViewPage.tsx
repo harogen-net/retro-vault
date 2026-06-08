@@ -1,14 +1,14 @@
 import {
-	IonButton,
-	IonButtons,
-	IonContent,
-	IonHeader,
-	IonPage,
-	IonTitle,
-	IonToolbar,
-	useIonRouter,
+  IonButton,
+  IonButtons,
+  IonContent,
+  IonHeader,
+  IonPage,
+  IonTitle,
+  IonToolbar,
+  useIonRouter,
 } from "@ionic/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
 import { useAlbumMutations } from "../hooks/useAlbumMutations";
@@ -19,6 +19,7 @@ export const PhotoViewPage = () => {
 	const router = useIonRouter();
 	const [busy, setBusy] = useState(false);
 	const [currentIndex, setCurrentIndex] = useState(0);
+	const [displayImages, setDisplayImages] = useState<Array<{ id: string; src: string }>>([]);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const carouselRef = useRef<HTMLDivElement | null>(null);
 	const modal = useAppModal();
@@ -36,27 +37,72 @@ export const PhotoViewPage = () => {
 		reload,
 	} = usePhoto(albumId, photoId);
 
-	const imageUrls = useMemo(() => {
-		return images.map((image) => ({
-			id: image.id,
-			src: URL.createObjectURL(image.blob),
-		}));
-	}, [images]);
+	const toSafeBlob = (blob: Blob, mimeType?: string) => {
+		if (blob.type) {
+			return blob;
+		}
+
+		return new Blob([blob], { type: mimeType || "image/jpeg" });
+	};
+
+	const toDataUrl = useCallback((blob: Blob, mimeType?: string) => {
+		return new Promise<string>((resolve, reject) => {
+			const safeBlob = toSafeBlob(blob, mimeType);
+			const reader = new FileReader();
+
+			reader.onload = () => {
+				if (typeof reader.result === "string") {
+					resolve(reader.result);
+					return;
+				}
+
+				reject(new Error("画像変換に失敗しました。"));
+			};
+
+			reader.onerror = () => {
+				reject(reader.error ?? new Error("画像変換に失敗しました。"));
+			};
+			reader.readAsDataURL(safeBlob);
+		});
+	}, []);
 
 	useEffect(() => {
-		return () => {
-			for (const image of imageUrls) {
-				URL.revokeObjectURL(image.src);
+		let cancelled = false;
+
+		const loadDisplayImages = async () => {
+			if (images.length === 0) {
+				if (!cancelled) {
+					const fallback = photoUrl ? [{ id: photo?.id ?? "fallback-photo", src: photoUrl }] : [];
+					setDisplayImages(fallback);
+				}
+				return;
+			}
+
+			const next: Array<{ id: string; src: string }> = [];
+			for (const image of images) {
+				if (!image.blob) {
+					continue;
+				}
+
+				try {
+					const src = await toDataUrl(image.blob, image.mimeType);
+					next.push({ id: image.id, src });
+				} catch {
+					// Skip broken image while rendering others.
+				}
+			}
+
+			if (!cancelled) {
+				setDisplayImages(next);
 			}
 		};
-	}, [imageUrls]);
 
-	const displayImages =
-		imageUrls.length > 0
-			? imageUrls
-			: photoUrl
-				? [{ id: photo?.id ?? "fallback-photo", src: photoUrl }]
-				: [];
+		void loadDisplayImages();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [images, photo?.id, photoUrl, toDataUrl]);
 
 	const backToAlbum = () => {
 		if (router.canGoBack()) {
@@ -195,7 +241,8 @@ export const PhotoViewPage = () => {
 										src={image.src}
 										alt="撮影画像の拡大表示"
 										className="photo-fullscreen"
-										decoding="async"
+										loading="eager"
+										onError={() => setError("画像の表示に失敗しました。")}
 									/>
 								</article>
 							))}
