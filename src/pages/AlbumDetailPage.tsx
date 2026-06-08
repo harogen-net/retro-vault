@@ -637,7 +637,6 @@ export const AlbumDetailPage = () => {
 				className="visually-hidden"
 				type="file"
 				accept="image/*"
-				capture="environment"
 				onChange={onAddPhoto}
 			/>
 		</IonPage>

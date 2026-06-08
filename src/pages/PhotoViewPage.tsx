@@ -275,7 +275,6 @@ export const PhotoViewPage = () => {
 				className="visually-hidden"
 				type="file"
 				accept="image/*"
-				capture="environment"
 				onChange={onAddImage}
 			/>
 		</IonPage>

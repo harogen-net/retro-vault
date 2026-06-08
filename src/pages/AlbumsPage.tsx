@@ -214,10 +214,12 @@ export const AlbumsPage = () => {
 			message: `${session.files.length}枚を撮影しました。この内容で作成しますか？`,
 			confirmText: "作成する",
 			cancelText: "続けて撮影",
+			onCancel: () => {
+				fileInputRef.current?.click();
+			},
 		});
 
 		if (!shouldCreate) {
-			fileInputRef.current?.click();
 			return;
 		}
 

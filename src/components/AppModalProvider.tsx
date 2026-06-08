@@ -1,11 +1,11 @@
 import { useIonAlert } from "@ionic/react";
 import { useCallback, useMemo, useRef, type PropsWithChildren } from "react";
 import {
-	AppModalContext,
-	type AlertOptions,
-	type ConfirmOptions,
-	type ModalApi,
-	type PromptOptions,
+    AppModalContext,
+    type AlertOptions,
+    type ConfirmOptions,
+    type ModalApi,
+    type PromptOptions,
 } from "./appModalContext";
 
 export const AppModalProvider = ({ children }: PropsWithChildren) => {
@@ -57,12 +57,14 @@ export const AppModalProvider = ({ children }: PropsWithChildren) => {
 									role: "cancel",
 									handler: () => {
 										confirmed = false;
+										options.onCancel?.();
 									},
 								},
 								{
 									text: options.confirmText ?? "OK",
 									handler: () => {
 										confirmed = true;
+										options.onConfirm?.();
 									},
 								},
 							],

@@ -9,7 +9,10 @@ export type BaseOptions = {
 
 export type AlertOptions = BaseOptions;
 
-export type ConfirmOptions = BaseOptions;
+export type ConfirmOptions = BaseOptions & {
+	onConfirm?: () => void;
+	onCancel?: () => void;
+};
 
 export type PromptOptions = BaseOptions & {
 	defaultValue?: string;
