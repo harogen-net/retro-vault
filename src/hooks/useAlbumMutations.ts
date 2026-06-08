@@ -13,17 +13,7 @@ import {
 import { resizeImageToJpeg } from '../lib/image'
 
 export const useAlbumMutations = () => {
-  const createAlbumWithInitialPhoto = useCallback(async (title: string, file: File) => {
-    const album = await createAlbum(title)
-    const [prepared, thumbnail] = await Promise.all([
-      resizeImageToJpeg(file, MAX_IMAGE_EDGE, JPEG_QUALITY),
-      resizeImageToJpeg(file, THUMBNAIL_MAX_EDGE, JPEG_QUALITY),
-    ])
-    await addPhotoToAlbum(album.id, prepared, thumbnail.blob)
-    return album
-  }, [])
-
-  const addPhotoFromFile = useCallback(async (albumId: string, file: File) => {
+  const prepareAndAddPhoto = useCallback(async (albumId: string, file: File) => {
     const [prepared, thumbnail] = await Promise.all([
       resizeImageToJpeg(file, MAX_IMAGE_EDGE, JPEG_QUALITY),
       resizeImageToJpeg(file, THUMBNAIL_MAX_EDGE, JPEG_QUALITY),
@@ -31,6 +21,34 @@ export const useAlbumMutations = () => {
 
     return addPhotoToAlbum(albumId, prepared, thumbnail.blob)
   }, [])
+
+  const createAlbumWithPhotos = useCallback(async (title: string, files: File[]) => {
+    if (files.length === 0) {
+      throw new Error('画像が選択されていません。')
+    }
+
+    const album = await createAlbum(title)
+    const [firstFile, ...restFiles] = files
+    const basePhoto = await prepareAndAddPhoto(album.id, firstFile)
+
+    for (const file of restFiles) {
+      const [prepared, thumbnail] = await Promise.all([
+        resizeImageToJpeg(file, MAX_IMAGE_EDGE, JPEG_QUALITY),
+        resizeImageToJpeg(file, THUMBNAIL_MAX_EDGE, JPEG_QUALITY),
+      ])
+      await addImageToPhoto(basePhoto.id, prepared, thumbnail.blob)
+    }
+
+    return album
+  }, [prepareAndAddPhoto])
+
+  const createAlbumWithInitialPhoto = useCallback(async (title: string, file: File) => {
+    return createAlbumWithPhotos(title, [file])
+  }, [createAlbumWithPhotos])
+
+  const addPhotoFromFile = useCallback(async (albumId: string, file: File) => {
+    return prepareAndAddPhoto(albumId, file)
+  }, [prepareAndAddPhoto])
 
   const addImageToPhotoFromFile = useCallback(async (photoId: string, file: File) => {
     const [prepared, thumbnail] = await Promise.all([
@@ -65,6 +83,7 @@ export const useAlbumMutations = () => {
   }, [])
 
   return {
+    createAlbumWithPhotos,
     createAlbumWithInitialPhoto,
     addPhotoFromFile,
     addImageToPhotoFromFile,

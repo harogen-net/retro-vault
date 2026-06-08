@@ -27,6 +27,10 @@ import { listAlbums } from '../lib/db'
 import { formatDateTime } from '../lib/format'
 import type { Album } from '../types'
 
+type CaptureSession = {
+  files: File[]
+}
+
 const defaultAlbumTitle = (): string => {
   const d = new Date()
   const y = d.getFullYear()
@@ -43,9 +47,10 @@ export const AlbumsPage = () => {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const captureSessionRef = useRef<CaptureSession | null>(null)
   const router = useIonRouter()
   const modal = useAppModal()
-  const { createAlbumWithInitialPhoto } = useAlbumMutations()
+  const { createAlbumWithPhotos } = useAlbumMutations()
   const menuTriggerId = 'albums-menu-trigger'
 
   const albumCountLabel = useMemo(() => {
@@ -77,7 +82,55 @@ export const AlbumsPage = () => {
     void loadAlbums(true)
   })
 
+  const resetCaptureSession = () => {
+    captureSessionRef.current = null
+  }
+
+  const finalizeCaptureSession = useCallback(async () => {
+    const session = captureSessionRef.current
+    if (!session || session.files.length === 0) {
+      resetCaptureSession()
+      return
+    }
+
+    const suggestedName = defaultAlbumTitle()
+    const enteredName = await modal.prompt({
+      title: '新規アルバム',
+      message: 'アルバム名を入力してください。',
+      defaultValue: '',
+      placeholder: suggestedName,
+      confirmText: '作成',
+      cancelText: 'キャンセル',
+    })
+
+    if (enteredName === null) {
+      resetCaptureSession()
+      return
+    }
+
+    const albumName = enteredName === '' ? suggestedName : enteredName
+
+    try {
+      setBusy(true)
+      setError(null)
+
+      const album = await createAlbumWithPhotos(albumName, session.files)
+
+      await loadAlbums(false)
+      resetCaptureSession()
+      router.push(`/albums/${album.id}`, 'forward', 'push')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'アルバム作成に失敗しました。')
+      resetCaptureSession()
+    } finally {
+      setBusy(false)
+    }
+  }, [createAlbumWithPhotos, loadAlbums, router])
+
   const onFabClick = () => {
+    captureSessionRef.current = {
+      files: [],
+    }
     fileInputRef.current?.click()
   }
 
@@ -90,38 +143,41 @@ export const AlbumsPage = () => {
   }, [modal])
 
   const onCaptureNewAlbum = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const [file] = event.target.files ?? []
+    const files = Array.from(event.target.files ?? [])
     event.target.value = ''
 
-    if (!file) {
+    const session = captureSessionRef.current
+    if (!session) {
       return
     }
 
-    const name = (await modal.prompt({
-      title: '新規アルバム',
-      message: 'アルバム名を入力してください。',
-      defaultValue: defaultAlbumTitle(),
-      placeholder: 'アルバム名',
-      confirmText: '作成',
-      cancelText: 'キャンセル',
-    }))?.trim()
-    if (!name) {
+    if (files.length === 0 && session.files.length === 0) {
+      resetCaptureSession()
       return
     }
 
-    try {
-      setBusy(true)
-      setError(null)
-
-      const album = await createAlbumWithInitialPhoto(name, file)
-
-      await loadAlbums(false)
-      router.push(`/albums/${album.id}`, 'forward', 'push')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'アルバム作成に失敗しました。')
-    } finally {
-      setBusy(false)
+    if (files.length > 0) {
+      session.files.push(...files)
     }
+
+    if (files.length > 1 || files.length === 0) {
+      await finalizeCaptureSession()
+      return
+    }
+
+    const shouldCreate = await modal.confirm({
+      title: 'アルバム作成',
+      message: `${session.files.length}枚を撮影しました。この内容で作成しますか？`,
+      confirmText: '作成する',
+      cancelText: '続けて撮影',
+    })
+
+    if (!shouldCreate) {
+      fileInputRef.current?.click()
+      return
+    }
+
+    await finalizeCaptureSession()
   }
 
   return (
@@ -185,8 +241,8 @@ export const AlbumsPage = () => {
         hidden
         className="visually-hidden"
         type="file"
+        multiple
         accept="image/*"
-        capture="environment"
         onChange={onCaptureNewAlbum}
       />
 
