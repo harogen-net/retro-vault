@@ -1,8 +1,32 @@
 import { DB_NAME, DB_VERSION } from '../config/constants'
-import type { Album, Photo, PreparedPhoto } from '../types'
+import type { Album, Photo, PhotoImage, PreparedPhoto } from '../types'
 
 const ALBUM_STORE = 'albums'
 const PHOTO_STORE = 'photos'
+const PHOTO_IMAGE_STORE = 'photo_images'
+
+type StoredPhoto = {
+  id: string
+  albumId: string
+  createdAt: number
+  updatedAt: number
+  imageCount: number
+  coverImageId?: string
+  memo?: string
+}
+
+type LegacyPhoto = {
+  id: string
+  albumId: string
+  createdAt: number
+  width?: number
+  height?: number
+  sizeBytes?: number
+  mimeType?: string
+  blob?: Blob
+  thumbnailBlob?: Blob
+  memo?: string
+}
 
 let dbPromise: Promise<IDBDatabase> | undefined
 
@@ -21,6 +45,54 @@ const completeTx = (tx: IDBTransaction): Promise<void> => {
   })
 }
 
+const newId = (): string => {
+  if ('randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+const hydratePhoto = async (
+  storedPhoto: StoredPhoto,
+  imageStore: IDBObjectStore,
+  imageByPhotoCreatedAtIndex: IDBIndex,
+): Promise<Photo> => {
+  let coverImage: PhotoImage | undefined
+
+  if (storedPhoto.coverImageId) {
+    coverImage = (await toPromise(imageStore.get(storedPhoto.coverImageId))) as PhotoImage | undefined
+  }
+
+  if (!coverImage) {
+    const range = IDBKeyRange.bound(
+      [storedPhoto.id, 0],
+      [storedPhoto.id, Number.MAX_SAFE_INTEGER],
+    )
+    const images = (await toPromise(imageByPhotoCreatedAtIndex.getAll(range))) as PhotoImage[]
+    coverImage = images.sort((a, b) => b.createdAt - a.createdAt)[0]
+  }
+
+  if (!coverImage) {
+    throw new Error('画像が見つかりません。')
+  }
+
+  return {
+    id: storedPhoto.id,
+    albumId: storedPhoto.albumId,
+    createdAt: storedPhoto.createdAt,
+    updatedAt: storedPhoto.updatedAt,
+    imageCount: Math.max(1, storedPhoto.imageCount || 1),
+    width: coverImage.width,
+    height: coverImage.height,
+    sizeBytes: coverImage.sizeBytes,
+    mimeType: coverImage.mimeType,
+    blob: coverImage.blob,
+    thumbnailBlob: coverImage.thumbnailBlob,
+    memo: storedPhoto.memo,
+  }
+}
+
 const getDb = (): Promise<IDBDatabase> => {
   if (dbPromise) {
     return dbPromise
@@ -29,17 +101,92 @@ const getDb = (): Promise<IDBDatabase> => {
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result
+      const tx = request.transaction
+      if (!tx) {
+        return
+      }
 
+      let albumStore: IDBObjectStore
       if (!db.objectStoreNames.contains(ALBUM_STORE)) {
-        const albumStore = db.createObjectStore(ALBUM_STORE, { keyPath: 'id' })
+        albumStore = db.createObjectStore(ALBUM_STORE, { keyPath: 'id' })
+      } else {
+        albumStore = tx.objectStore(ALBUM_STORE)
+      }
+      if (!albumStore.indexNames.contains('by_updatedAt')) {
         albumStore.createIndex('by_updatedAt', 'updatedAt')
       }
 
+      let photoStore: IDBObjectStore
       if (!db.objectStoreNames.contains(PHOTO_STORE)) {
-        const photoStore = db.createObjectStore(PHOTO_STORE, { keyPath: 'id' })
+        photoStore = db.createObjectStore(PHOTO_STORE, { keyPath: 'id' })
+      } else {
+        photoStore = tx.objectStore(PHOTO_STORE)
+      }
+      if (!photoStore.indexNames.contains('by_album_createdAt')) {
         photoStore.createIndex('by_album_createdAt', ['albumId', 'createdAt'])
+      }
+
+      let imageStore: IDBObjectStore
+      if (!db.objectStoreNames.contains(PHOTO_IMAGE_STORE)) {
+        imageStore = db.createObjectStore(PHOTO_IMAGE_STORE, { keyPath: 'id' })
+      } else {
+        imageStore = tx.objectStore(PHOTO_IMAGE_STORE)
+      }
+      if (!imageStore.indexNames.contains('by_photo_createdAt')) {
+        imageStore.createIndex('by_photo_createdAt', ['photoId', 'createdAt'])
+      }
+      if (!imageStore.indexNames.contains('by_photo')) {
+        imageStore.createIndex('by_photo', 'photoId')
+      }
+
+      if (event.oldVersion < 2) {
+        const cursorRequest = photoStore.openCursor()
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result
+          if (!cursor) {
+            return
+          }
+
+          const value = cursor.value as LegacyPhoto | StoredPhoto
+          const legacyBlob = (value as LegacyPhoto).blob
+
+          if (!legacyBlob) {
+            cursor.continue()
+            return
+          }
+
+          const legacy = value as LegacyPhoto
+          const now = legacy.createdAt || Date.now()
+          const imageId = newId()
+
+          const storedPhoto: StoredPhoto = {
+            id: legacy.id,
+            albumId: legacy.albumId,
+            createdAt: now,
+            updatedAt: now,
+            imageCount: 1,
+            coverImageId: imageId,
+            memo: legacy.memo,
+          }
+
+          const image: PhotoImage = {
+            id: imageId,
+            photoId: legacy.id,
+            createdAt: now,
+            width: legacy.width ?? 0,
+            height: legacy.height ?? 0,
+            sizeBytes: legacy.sizeBytes ?? legacyBlob.size,
+            mimeType: legacy.mimeType ?? legacyBlob.type ?? 'image/jpeg',
+            blob: legacyBlob,
+            thumbnailBlob: legacy.thumbnailBlob,
+          }
+
+          cursor.update(storedPhoto)
+          imageStore.add(image)
+          cursor.continue()
+        }
       }
     }
 
@@ -50,19 +197,11 @@ const getDb = (): Promise<IDBDatabase> => {
   return dbPromise
 }
 
-const newId = (): string => {
-  if ('randomUUID' in crypto) {
-    return crypto.randomUUID()
-  }
-
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
-
 export const listAlbums = async (): Promise<Album[]> => {
   const db = await getDb()
   const tx = db.transaction(ALBUM_STORE, 'readonly')
   const store = tx.objectStore(ALBUM_STORE)
-  const result = await toPromise(store.getAll())
+  const result = (await toPromise(store.getAll())) as Album[]
   await completeTx(tx)
 
   return result.sort((a, b) => b.updatedAt - a.updatedAt)
@@ -72,7 +211,7 @@ export const getAlbum = async (albumId: string): Promise<Album | undefined> => {
   const db = await getDb()
   const tx = db.transaction(ALBUM_STORE, 'readonly')
   const store = tx.objectStore(ALBUM_STORE)
-  const album = await toPromise(store.get(albumId))
+  const album = (await toPromise(store.get(albumId))) as Album | undefined
   await completeTx(tx)
 
   return album
@@ -118,50 +257,52 @@ export const renameAlbumTitle = async (albumId: string, title: string): Promise<
   return updatedAlbum
 }
 
-export const deleteAlbumWithPhotos = async (albumId: string): Promise<void> => {
-  const db = await getDb()
-  const tx = db.transaction([ALBUM_STORE, PHOTO_STORE], 'readwrite')
-  const albumStore = tx.objectStore(ALBUM_STORE)
-  const photoStore = tx.objectStore(PHOTO_STORE)
-  const photoIndex = photoStore.index('by_album_createdAt')
-
-  const album = (await toPromise(albumStore.get(albumId))) as Album | undefined
-  if (!album) {
-    tx.abort()
-    throw new Error('アルバムが見つかりません。')
-  }
-
-  const range = IDBKeyRange.bound([albumId, 0], [albumId, Number.MAX_SAFE_INTEGER])
-  const photos = (await toPromise(photoIndex.getAll(range))) as Photo[]
-
-  for (const photo of photos) {
-    photoStore.delete(photo.id)
-  }
-
-  albumStore.delete(albumId)
-  await completeTx(tx)
-}
-
 export const listPhotosByAlbum = async (albumId: string): Promise<Photo[]> => {
   const db = await getDb()
-  const tx = db.transaction(PHOTO_STORE, 'readonly')
-  const store = tx.objectStore(PHOTO_STORE)
-  const index = store.index('by_album_createdAt')
+  const tx = db.transaction([PHOTO_STORE, PHOTO_IMAGE_STORE], 'readonly')
+  const photoStore = tx.objectStore(PHOTO_STORE)
+  const imageStore = tx.objectStore(PHOTO_IMAGE_STORE)
+  const photoIndex = photoStore.index('by_album_createdAt')
+  const imageByPhotoCreatedAtIndex = imageStore.index('by_photo_createdAt')
   const range = IDBKeyRange.bound([albumId, 0], [albumId, Number.MAX_SAFE_INTEGER])
-  const photos = await toPromise(index.getAll(range))
-  await completeTx(tx)
 
+  const storedPhotos = (await toPromise(photoIndex.getAll(range))) as StoredPhoto[]
+  const photos = await Promise.all(
+    storedPhotos.map((stored) => hydratePhoto(stored, imageStore, imageByPhotoCreatedAtIndex)),
+  )
+
+  await completeTx(tx)
   return photos.sort((a, b) => b.createdAt - a.createdAt)
 }
 
 export const getPhotoById = async (photoId: string): Promise<Photo | undefined> => {
   const db = await getDb()
-  const tx = db.transaction(PHOTO_STORE, 'readonly')
-  const store = tx.objectStore(PHOTO_STORE)
-  const photo = await toPromise(store.get(photoId))
+  const tx = db.transaction([PHOTO_STORE, PHOTO_IMAGE_STORE], 'readonly')
+  const photoStore = tx.objectStore(PHOTO_STORE)
+  const imageStore = tx.objectStore(PHOTO_IMAGE_STORE)
+  const imageByPhotoCreatedAtIndex = imageStore.index('by_photo_createdAt')
+
+  const storedPhoto = (await toPromise(photoStore.get(photoId))) as StoredPhoto | undefined
+  if (!storedPhoto) {
+    await completeTx(tx)
+    return undefined
+  }
+
+  const photo = await hydratePhoto(storedPhoto, imageStore, imageByPhotoCreatedAtIndex)
+  await completeTx(tx)
+  return photo
+}
+
+export const listImagesByPhoto = async (photoId: string): Promise<PhotoImage[]> => {
+  const db = await getDb()
+  const tx = db.transaction(PHOTO_IMAGE_STORE, 'readonly')
+  const imageStore = tx.objectStore(PHOTO_IMAGE_STORE)
+  const imageByPhotoCreatedAtIndex = imageStore.index('by_photo_createdAt')
+  const range = IDBKeyRange.bound([photoId, 0], [photoId, Number.MAX_SAFE_INTEGER])
+  const images = (await toPromise(imageByPhotoCreatedAtIndex.getAll(range))) as PhotoImage[]
   await completeTx(tx)
 
-  return photo
+  return images.sort((a, b) => b.createdAt - a.createdAt)
 }
 
 export const addPhotoToAlbum = async (
@@ -170,9 +311,10 @@ export const addPhotoToAlbum = async (
   thumbnailBlob?: Blob,
 ): Promise<Photo> => {
   const db = await getDb()
-  const tx = db.transaction([ALBUM_STORE, PHOTO_STORE], 'readwrite')
+  const tx = db.transaction([ALBUM_STORE, PHOTO_STORE, PHOTO_IMAGE_STORE], 'readwrite')
   const albumStore = tx.objectStore(ALBUM_STORE)
   const photoStore = tx.objectStore(PHOTO_STORE)
+  const imageStore = tx.objectStore(PHOTO_IMAGE_STORE)
 
   const album = (await toPromise(albumStore.get(albumId))) as Album | undefined
   if (!album) {
@@ -181,9 +323,21 @@ export const addPhotoToAlbum = async (
   }
 
   const now = Date.now()
-  const photo: Photo = {
-    id: newId(),
+  const photoId = newId()
+  const imageId = newId()
+
+  const storedPhoto: StoredPhoto = {
+    id: photoId,
     albumId,
+    createdAt: now,
+    updatedAt: now,
+    imageCount: 1,
+    coverImageId: imageId,
+  }
+
+  const image: PhotoImage = {
+    id: imageId,
+    photoId,
     createdAt: now,
     width: preparedPhoto.width,
     height: preparedPhoto.height,
@@ -193,7 +347,8 @@ export const addPhotoToAlbum = async (
     thumbnailBlob,
   }
 
-  photoStore.add(photo)
+  photoStore.add(storedPhoto)
+  imageStore.add(image)
   albumStore.put({
     ...album,
     photoCount: album.photoCount + 1,
@@ -201,24 +356,131 @@ export const addPhotoToAlbum = async (
   })
 
   await completeTx(tx)
-  return photo
+
+  return {
+    id: photoId,
+    albumId,
+    createdAt: now,
+    updatedAt: now,
+    imageCount: 1,
+    width: image.width,
+    height: image.height,
+    sizeBytes: image.sizeBytes,
+    mimeType: image.mimeType,
+    blob: image.blob,
+    thumbnailBlob: image.thumbnailBlob,
+  }
+}
+
+export const addImageToPhoto = async (
+  photoId: string,
+  preparedPhoto: PreparedPhoto,
+  thumbnailBlob?: Blob,
+): Promise<Photo> => {
+  const db = await getDb()
+  const tx = db.transaction([PHOTO_STORE, PHOTO_IMAGE_STORE], 'readwrite')
+  const photoStore = tx.objectStore(PHOTO_STORE)
+  const imageStore = tx.objectStore(PHOTO_IMAGE_STORE)
+
+  const storedPhoto = (await toPromise(photoStore.get(photoId))) as StoredPhoto | undefined
+  if (!storedPhoto) {
+    tx.abort()
+    throw new Error('写真が見つかりません。')
+  }
+
+  const now = Date.now()
+  const imageId = newId()
+  const image: PhotoImage = {
+    id: imageId,
+    photoId,
+    createdAt: now,
+    width: preparedPhoto.width,
+    height: preparedPhoto.height,
+    sizeBytes: preparedPhoto.sizeBytes,
+    mimeType: preparedPhoto.mimeType,
+    blob: preparedPhoto.blob,
+    thumbnailBlob,
+  }
+
+  const updatedPhoto: StoredPhoto = {
+    ...storedPhoto,
+    updatedAt: now,
+    imageCount: Math.max(1, storedPhoto.imageCount || 1) + 1,
+    coverImageId: imageId,
+  }
+
+  imageStore.add(image)
+  photoStore.put(updatedPhoto)
+  await completeTx(tx)
+
+  return {
+    id: updatedPhoto.id,
+    albumId: updatedPhoto.albumId,
+    createdAt: updatedPhoto.createdAt,
+    updatedAt: updatedPhoto.updatedAt,
+    imageCount: updatedPhoto.imageCount,
+    width: image.width,
+    height: image.height,
+    sizeBytes: image.sizeBytes,
+    mimeType: image.mimeType,
+    blob: image.blob,
+    thumbnailBlob: image.thumbnailBlob,
+    memo: updatedPhoto.memo,
+  }
 }
 
 export const updatePhotoMemo = async (photoId: string, memo: string): Promise<Photo> => {
   const db = await getDb()
-  const tx = db.transaction(PHOTO_STORE, 'readwrite')
-  const store = tx.objectStore(PHOTO_STORE)
+  const tx = db.transaction([PHOTO_STORE, PHOTO_IMAGE_STORE], 'readwrite')
+  const photoStore = tx.objectStore(PHOTO_STORE)
+  const imageStore = tx.objectStore(PHOTO_IMAGE_STORE)
+  const imageByPhotoCreatedAtIndex = imageStore.index('by_photo_createdAt')
 
-  const photo = (await toPromise(store.get(photoId))) as Photo | undefined
-  if (!photo) {
+  const storedPhoto = (await toPromise(photoStore.get(photoId))) as StoredPhoto | undefined
+  if (!storedPhoto) {
     tx.abort()
     throw new Error('画像が見つかりません。')
   }
 
-  const updated: Photo = { ...photo, memo: memo.trim() || undefined }
-  store.put(updated)
+  const updatedPhoto: StoredPhoto = {
+    ...storedPhoto,
+    memo: memo.trim() || undefined,
+  }
+
+  photoStore.put(updatedPhoto)
+  const hydrated = await hydratePhoto(updatedPhoto, imageStore, imageByPhotoCreatedAtIndex)
   await completeTx(tx)
-  return updated
+  return hydrated
+}
+
+export const deleteAlbumWithPhotos = async (albumId: string): Promise<void> => {
+  const db = await getDb()
+  const tx = db.transaction([ALBUM_STORE, PHOTO_STORE, PHOTO_IMAGE_STORE], 'readwrite')
+  const albumStore = tx.objectStore(ALBUM_STORE)
+  const photoStore = tx.objectStore(PHOTO_STORE)
+  const imageStore = tx.objectStore(PHOTO_IMAGE_STORE)
+  const photoIndex = photoStore.index('by_album_createdAt')
+  const imageByPhotoIndex = imageStore.index('by_photo')
+
+  const album = (await toPromise(albumStore.get(albumId))) as Album | undefined
+  if (!album) {
+    tx.abort()
+    throw new Error('アルバムが見つかりません。')
+  }
+
+  const range = IDBKeyRange.bound([albumId, 0], [albumId, Number.MAX_SAFE_INTEGER])
+  const photos = (await toPromise(photoIndex.getAll(range))) as StoredPhoto[]
+
+  for (const photo of photos) {
+    const imageKeys = (await toPromise(imageByPhotoIndex.getAllKeys(photo.id))) as IDBValidKey[]
+    for (const imageKey of imageKeys) {
+      imageStore.delete(imageKey)
+    }
+    photoStore.delete(photo.id)
+  }
+
+  albumStore.delete(albumId)
+  await completeTx(tx)
 }
 
 export const deletePhotosFromAlbum = async (
@@ -230,9 +492,11 @@ export const deletePhotosFromAlbum = async (
   }
 
   const db = await getDb()
-  const tx = db.transaction([ALBUM_STORE, PHOTO_STORE], 'readwrite')
+  const tx = db.transaction([ALBUM_STORE, PHOTO_STORE, PHOTO_IMAGE_STORE], 'readwrite')
   const albumStore = tx.objectStore(ALBUM_STORE)
   const photoStore = tx.objectStore(PHOTO_STORE)
+  const imageStore = tx.objectStore(PHOTO_IMAGE_STORE)
+  const imageByPhotoIndex = imageStore.index('by_photo')
 
   const album = (await toPromise(albumStore.get(albumId))) as Album | undefined
   if (!album) {
@@ -242,9 +506,14 @@ export const deletePhotosFromAlbum = async (
 
   let deletedCount = 0
   for (const photoId of photoIds) {
-    const photo = (await toPromise(photoStore.get(photoId))) as Photo | undefined
+    const photo = (await toPromise(photoStore.get(photoId))) as StoredPhoto | undefined
     if (!photo || photo.albumId !== albumId) {
       continue
+    }
+
+    const imageKeys = (await toPromise(imageByPhotoIndex.getAllKeys(photo.id))) as IDBValidKey[]
+    for (const imageKey of imageKeys) {
+      imageStore.delete(imageKey)
     }
 
     photoStore.delete(photoId)
@@ -284,7 +553,7 @@ export const movePhotosToAlbum = async (
 
   let movedCount = 0
   for (const photoId of photoIds) {
-    const photo = (await toPromise(photoStore.get(photoId))) as Photo | undefined
+    const photo = (await toPromise(photoStore.get(photoId))) as StoredPhoto | undefined
     if (!photo || photo.albumId !== sourceAlbumId) {
       continue
     }

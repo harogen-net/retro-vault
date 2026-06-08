@@ -1,13 +1,14 @@
 import { useCallback } from 'react'
 import { JPEG_QUALITY, MAX_IMAGE_EDGE, THUMBNAIL_MAX_EDGE } from '../config/constants'
 import {
-	addPhotoToAlbum,
-	createAlbum,
-	deleteAlbumWithPhotos,
-	deletePhotosFromAlbum,
-	movePhotosToAlbum,
-	renameAlbumTitle,
-	updatePhotoMemo,
+    addImageToPhoto,
+    addPhotoToAlbum,
+    createAlbum,
+    deleteAlbumWithPhotos,
+    deletePhotosFromAlbum,
+    movePhotosToAlbum,
+    renameAlbumTitle,
+    updatePhotoMemo,
 } from '../lib/db'
 import { resizeImageToJpeg } from '../lib/image'
 
@@ -29,6 +30,15 @@ export const useAlbumMutations = () => {
     ])
 
     return addPhotoToAlbum(albumId, prepared, thumbnail.blob)
+  }, [])
+
+  const addImageToPhotoFromFile = useCallback(async (photoId: string, file: File) => {
+    const [prepared, thumbnail] = await Promise.all([
+      resizeImageToJpeg(file, MAX_IMAGE_EDGE, JPEG_QUALITY),
+      resizeImageToJpeg(file, THUMBNAIL_MAX_EDGE, JPEG_QUALITY),
+    ])
+
+    return addImageToPhoto(photoId, prepared, thumbnail.blob)
   }, [])
 
   const renameAlbum = useCallback((albumId: string, title: string) => {
@@ -57,6 +67,7 @@ export const useAlbumMutations = () => {
   return {
     createAlbumWithInitialPhoto,
     addPhotoFromFile,
+    addImageToPhotoFromFile,
     renameAlbum,
     deleteAlbum,
     deletePhotos,
