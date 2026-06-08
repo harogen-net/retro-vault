@@ -5,6 +5,7 @@ import {
   addPhotoToAlbum,
   createAlbum,
   deleteAlbumWithPhotos,
+  deleteImageFromPhoto,
   deletePhotosFromAlbum,
   movePhotosToAlbum,
   renameAlbumTitle,
@@ -91,11 +92,16 @@ export const useAlbumMutations = () => {
 		return updatePhotoMemo(photoId, memo);
 	}, []);
 
+	const deletePhotoImage = useCallback((photoId: string, imageId: string) => {
+		return deleteImageFromPhoto(photoId, imageId);
+	}, []);
+
 	return {
 		createAlbumWithPhotos,
 		createAlbumWithInitialPhoto,
 		addPhotoFromFile,
 		addImageToPhotoFromFile,
+		deletePhotoImage,
 		renameAlbum,
 		deleteAlbum,
 		deletePhotos,

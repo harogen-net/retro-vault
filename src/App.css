@@ -201,6 +201,8 @@
   max-height: 100%;
   object-fit: contain;
   background: #000;
+  transform-origin: center center;
+  transition: transform 120ms ease-out;
 }
 
 .photo-fullscreen-full {
@@ -227,6 +229,46 @@
   font-size: 0.76rem;
   line-height: 1.1;
   pointer-events: none;
+}
+
+.photo-pan-hint {
+  position: absolute;
+  top: 0.8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  pointer-events: none;
+}
+
+.photo-zoom-controls {
+  position: absolute;
+  top: 0.7rem;
+  left: 0.8rem;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 0.05rem 0.2rem;
+}
+
+.photo-zoom-controls ion-button {
+  --color: rgba(255, 255, 255, 0.95);
+  --padding-start: 0.45rem;
+  --padding-end: 0.45rem;
+  --ripple-color: rgba(255, 255, 255, 0.25);
+  margin: 0;
+  font-size: 0.8rem;
+  min-height: 1.9rem;
 }
 
 .photo-memo {

@@ -458,6 +458,80 @@ export const addImageToPhoto = async (
 	};
 };
 
+export const deleteImageFromPhoto = async (
+	photoId: string,
+	imageId: string
+): Promise<Photo> => {
+	const db = await getDb();
+	const tx = db.transaction([PHOTO_STORE, PHOTO_IMAGE_STORE], "readwrite");
+	const photoStore = tx.objectStore(PHOTO_STORE);
+	const imageStore = tx.objectStore(PHOTO_IMAGE_STORE);
+	const imageByPhotoIndex = imageStore.index("by_photo");
+	const imageByPhotoCreatedAtIndex = imageStore.index("by_photo_createdAt");
+
+	const storedPhoto = (await toPromise(photoStore.get(photoId))) as StoredPhoto | undefined;
+	if (!storedPhoto) {
+		tx.abort();
+		throw new Error("写真が見つかりません。");
+	}
+
+	const targetImage = (await toPromise(imageStore.get(imageId))) as PhotoImage | undefined;
+	if (!targetImage || targetImage.photoId !== photoId) {
+		tx.abort();
+		throw new Error("削除対象の画像が見つかりません。");
+	}
+
+	const imageKeys = (await toPromise(imageByPhotoIndex.getAllKeys(photoId))) as IDBValidKey[];
+	if (imageKeys.length <= 1) {
+		tx.abort();
+		throw new Error("最後の1枚は削除できません。");
+	}
+
+	imageStore.delete(imageId);
+
+	const range = IDBKeyRange.bound([photoId, 0], [photoId, Number.MAX_SAFE_INTEGER]);
+	const latestRemainingImage = await new Promise<PhotoImage | undefined>((resolve, reject) => {
+		const request = imageByPhotoCreatedAtIndex.openCursor(range, "prev");
+
+		request.onsuccess = () => {
+			const cursor = request.result;
+			if (!cursor) {
+				resolve(undefined);
+				return;
+			}
+
+			const image = cursor.value as PhotoImage;
+			if (image.id === imageId) {
+				cursor.continue();
+				return;
+			}
+
+			resolve(image);
+		};
+
+		request.onerror = () => {
+			reject(request.error ?? new Error("画像情報の取得に失敗しました。"));
+		};
+	});
+
+	if (!latestRemainingImage) {
+		tx.abort();
+		throw new Error("削除後の画像情報が取得できませんでした。");
+	}
+
+	const updatedPhoto: StoredPhoto = {
+		...storedPhoto,
+		updatedAt: Date.now(),
+		imageCount: Math.max(1, imageKeys.length - 1),
+		coverImageId: latestRemainingImage.id,
+	};
+
+	photoStore.put(updatedPhoto);
+	const hydrated = await hydratePhoto(updatedPhoto, imageStore, imageByPhotoCreatedAtIndex);
+	await completeTx(tx);
+	return hydrated;
+};
+
 export const updatePhotoMemo = async (photoId: string, memo: string): Promise<Photo> => {
 	const db = await getDb();
 	const tx = db.transaction([PHOTO_STORE, PHOTO_IMAGE_STORE], "readwrite");
