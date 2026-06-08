@@ -26,7 +26,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
 import { useAlbumMutations } from "../hooks/useAlbumMutations";
-import { getAlbum, listAlbums, listPhotosByAlbum } from "../lib/db";
+import { exportAlbumToZip, getAlbum, importAlbumFromZip, listAlbums, listPhotosByAlbum } from "../lib/db";
 import { formatDateTime } from "../lib/format";
 import type { Album, Photo } from "../types";
 
@@ -51,6 +51,8 @@ type AlbumDetailOverlayProps = {
 	albumOptions: Album[];
 	onAddPhotoClick: () => void;
 	onRenameAlbum: () => Promise<void>;
+	onExportAlbum: () => Promise<void>;
+	onImportAlbum: () => void;
 	onToggleSelectionMode: () => void;
 	onDeleteAlbum: () => Promise<void>;
 	onMoveSelected: (targetAlbumId: string) => Promise<void>;
@@ -154,6 +156,8 @@ const AlbumDetailOverlay = ({
 	albumOptions,
 	onAddPhotoClick,
 	onRenameAlbum,
+	onExportAlbum,
+	onImportAlbum,
 	onToggleSelectionMode,
 	onDeleteAlbum,
 	onMoveSelected,
@@ -182,6 +186,12 @@ const AlbumDetailOverlay = ({
 				<IonList className="album-menu-list">
 					<IonItem button onClick={() => void onRenameAlbum()}>
 						アルバム名変更
+					</IonItem>
+					<IonItem button onClick={() => void onExportAlbum()}>
+						エクスポート
+					</IonItem>
+					<IonItem button onClick={onImportAlbum}>
+						インポート
 					</IonItem>
 					<IonItem button onClick={onToggleSelectionMode}>
 						{selectionMode ? "選択モード終了" : "選択モード開始"}
@@ -270,6 +280,7 @@ export const AlbumDetailPage = () => {
 		Array<{ id: string; src: string; createdAt: number; memo: string | undefined }>
 	>([]);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
+	const importInputRef = useRef<HTMLInputElement | null>(null);
 	const router = useIonRouter();
 	const menuTriggerId = "album-detail-menu-trigger";
 	const modal = useAppModal();
@@ -391,6 +402,55 @@ export const AlbumDetailPage = () => {
 
 	const onAddPhotoClick = () => {
 		fileInputRef.current?.click();
+	};
+
+	const onExportAlbum = async () => {
+		if (!album) {
+			return;
+		}
+
+		try {
+			setBusy(true);
+			setError(null);
+			const zipBlob = await exportAlbumToZip(album.id);
+			const downloadName = `${album.title.replace(/[\\/:*?"<>|]/g, "_") || "album"}.retro-vault.v1.zip`;
+			const url = URL.createObjectURL(zipBlob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = downloadName;
+			document.body.append(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(url);
+		} catch (e) {
+			setError(e instanceof Error ? e.message : "エクスポートに失敗しました。");
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const onImportAlbum = () => {
+		importInputRef.current?.click();
+	};
+
+	const onImportZip = async (event: React.ChangeEvent<HTMLInputElement>) => {
+		const [file] = event.target.files ?? [];
+		event.target.value = "";
+
+		if (!file) {
+			return;
+		}
+
+		try {
+			setBusy(true);
+			setError(null);
+			const imported = await importAlbumFromZip(file);
+			router.push(`/albums/${encodeURIComponent(imported.id)}`, "forward", "push");
+		} catch (e) {
+			setError(e instanceof Error ? e.message : "インポートに失敗しました。");
+		} finally {
+			setBusy(false);
+		}
 	};
 
 	const onRenameAlbum = async () => {
@@ -614,6 +674,8 @@ export const AlbumDetailPage = () => {
 					albumOptions={albumOptions}
 					onAddPhotoClick={onAddPhotoClick}
 					onRenameAlbum={onRenameAlbum}
+					onExportAlbum={onExportAlbum}
+					onImportAlbum={onImportAlbum}
 					onToggleSelectionMode={toggleSelectionMode}
 					onDeleteAlbum={onDeleteAlbum}
 					onMoveSelected={onMoveSelected}
@@ -638,6 +700,14 @@ export const AlbumDetailPage = () => {
 				type="file"
 				accept="image/*"
 				onChange={onAddPhoto}
+			/>
+			<input
+				ref={importInputRef}
+				hidden
+				className="visually-hidden"
+				type="file"
+				accept=".zip,application/zip"
+				onChange={onImportZip}
 			/>
 		</IonPage>
 	);

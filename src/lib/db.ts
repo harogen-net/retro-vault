@@ -1,5 +1,7 @@
-import { DB_NAME, DB_VERSION } from "../config/constants";
+import JSZip from "jszip";
+import { DB_NAME, DB_VERSION, JPEG_QUALITY, THUMBNAIL_MAX_EDGE } from "../config/constants";
 import type { Album, Photo, PhotoImage, PreparedPhoto } from "../types";
+import { resizeImageToJpeg } from "./image";
 
 const ALBUM_STORE = "albums";
 const PHOTO_STORE = "photos";
@@ -28,6 +30,33 @@ type LegacyPhoto = {
 	memo?: string;
 };
 
+type BlobPayload = {
+	mimeType: string;
+	dataBase64: string;
+};
+
+type PhotoImageArchiveRecord = Omit<PhotoImage, "blob" | "thumbnailBlob"> & {
+	blob: BlobPayload;
+};
+
+type AlbumArchiveMeta = {
+	formatVersion: 1;
+	kind: "retro-vault-album";
+	exportedAt: number;
+	sourceAlbumId: string;
+};
+
+type AlbumArchiveData = {
+	album: Album;
+	photos: StoredPhoto[];
+	images: PhotoImageArchiveRecord[];
+};
+
+type AlbumArchive = {
+	meta: AlbumArchiveMeta;
+	data: AlbumArchiveData;
+};
+
 let dbPromise: Promise<IDBDatabase> | undefined;
 
 const toPromise = <T>(request: IDBRequest<T>): Promise<T> => {
@@ -51,6 +80,61 @@ const newId = (): string => {
 	}
 
 	return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+	const bytes = new Uint8Array(buffer);
+	let binary = "";
+	const chunkSize = 0x8000;
+
+	for (let index = 0; index < bytes.length; index += chunkSize) {
+		const chunk = bytes.subarray(index, index + chunkSize);
+		binary += String.fromCharCode(...chunk);
+	}
+
+	return btoa(binary);
+};
+
+const base64ToBlob = (payload: BlobPayload): Blob => {
+	const binary = atob(payload.dataBase64);
+	const bytes = new Uint8Array(binary.length);
+
+	for (let i = 0; i < binary.length; i += 1) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+
+	return new Blob([bytes], { type: payload.mimeType || "application/octet-stream" });
+};
+
+const blobToPayload = async (blob?: Blob): Promise<BlobPayload | undefined> => {
+	if (!blob) {
+		return undefined;
+	}
+
+	return {
+		mimeType: blob.type || "application/octet-stream",
+		dataBase64: arrayBufferToBase64(await blob.arrayBuffer()),
+	};
+};
+
+const withIncrementedSuffix = (baseTitle: string, existingTitles: string[]): string => {
+	const escapedBase = baseTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const suffixPattern = new RegExp(`^${escapedBase} \\((\\d+)\\)$`);
+	let maxSuffix = existingTitles.includes(baseTitle) ? 1 : 0;
+
+	for (const title of existingTitles) {
+		const match = title.match(suffixPattern);
+		if (!match) {
+			continue;
+		}
+
+		const suffix = Number(match[1]);
+		if (Number.isFinite(suffix)) {
+			maxSuffix = Math.max(maxSuffix, suffix);
+		}
+	}
+
+	return `${baseTitle} (${Math.max(2, maxSuffix + 1)})`;
 };
 
 const hydratePhoto = async (
@@ -332,6 +416,241 @@ export const listImagesByPhoto = async (photoId: string): Promise<PhotoImage[]> 
 
 	await completeTx(tx);
 	return images;
+};
+
+export const exportAlbumToZip = async (albumId: string): Promise<Blob> => {
+	const db = await getDb();
+	const tx = db.transaction([ALBUM_STORE, PHOTO_STORE, PHOTO_IMAGE_STORE], "readonly");
+	const albumStore = tx.objectStore(ALBUM_STORE);
+	const photoStore = tx.objectStore(PHOTO_STORE);
+	const imageStore = tx.objectStore(PHOTO_IMAGE_STORE);
+	const photoIndex = photoStore.index("by_album_createdAt");
+	const imageByPhotoIndex = imageStore.index("by_photo");
+
+	const album = (await toPromise(albumStore.get(albumId))) as Album | undefined;
+	if (!album) {
+		await completeTx(tx);
+		throw new Error("エクスポート対象のアルバムが見つかりません。");
+	}
+
+	const range = IDBKeyRange.bound([albumId, 0], [albumId, Number.MAX_SAFE_INTEGER]);
+	const photos = (await toPromise(photoIndex.getAll(range))) as StoredPhoto[];
+	const imageRecords: PhotoImageArchiveRecord[] = [];
+
+	for (const photo of photos) {
+		const imageKeys = (await toPromise(imageByPhotoIndex.getAllKeys(photo.id))) as IDBValidKey[];
+		for (const imageKey of imageKeys) {
+			const image = (await toPromise(imageStore.get(imageKey))) as PhotoImage | undefined;
+			if (!image) {
+				continue;
+			}
+
+			const blob = await blobToPayload(image.blob);
+			if (!blob) {
+				continue;
+			}
+
+			imageRecords.push({
+				id: image.id,
+				photoId: image.photoId,
+				createdAt: image.createdAt,
+				width: image.width,
+				height: image.height,
+				sizeBytes: image.sizeBytes,
+				mimeType: image.mimeType,
+				blob,
+			});
+		}
+	}
+
+	await completeTx(tx);
+
+	const archive: AlbumArchive = {
+		meta: {
+			formatVersion: 1,
+			kind: "retro-vault-album",
+			exportedAt: Date.now(),
+			sourceAlbumId: album.id,
+		},
+		data: {
+			album,
+			photos,
+			images: imageRecords,
+		},
+	};
+
+	const zip = new JSZip();
+	zip.file("album.json", JSON.stringify(archive));
+	return zip.generateAsync({
+		type: "blob",
+		compression: "DEFLATE",
+		compressionOptions: { level: 9 },
+	});
+};
+
+export const importAlbumFromZip = async (file: Blob): Promise<Album> => {
+	const zip = await JSZip.loadAsync(file);
+	const archiveFile = zip.file("album.json") ?? Object.values(zip.files).find((entry) => !entry.dir && entry.name.endsWith(".json"));
+	if (!archiveFile) {
+		throw new Error("ZIP内に album.json が見つかりません。");
+	}
+
+	const content = await archiveFile.async("string");
+	const parsed = JSON.parse(content) as Partial<AlbumArchive>;
+	if (!parsed.meta || !parsed.data || parsed.meta.formatVersion !== 1 || parsed.meta.kind !== "retro-vault-album") {
+		throw new Error("サポートされていないインポート形式です。");
+	}
+
+	const sourceAlbum = parsed.data.album;
+	const sourcePhotos = parsed.data.photos ?? [];
+	const sourceImages = parsed.data.images ?? [];
+	if (!sourceAlbum || sourcePhotos.length === 0 || sourceImages.length === 0) {
+		throw new Error("インポートデータが不正です。");
+	}
+
+	const newAlbumId = newId();
+	const photoIdMap = new Map<string, string>();
+	const imageIdMap = new Map<string, string>();
+	for (const sourcePhoto of sourcePhotos) {
+		photoIdMap.set(sourcePhoto.id, newId());
+	}
+	for (const sourceImage of sourceImages) {
+		imageIdMap.set(sourceImage.id, newId());
+	}
+
+	const imagesByPhoto = new Map<string, PhotoImageArchiveRecord[]>();
+	for (const sourceImage of sourceImages) {
+		const list = imagesByPhoto.get(sourceImage.photoId) ?? [];
+		list.push(sourceImage);
+		imagesByPhoto.set(sourceImage.photoId, list);
+	}
+
+	const importedAt = Date.now();
+
+	const preparedImages = await Promise.all(
+		sourceImages.map(async (sourceImage) => {
+			const blob = base64ToBlob(sourceImage.blob);
+			const thumbnailPrepared = await resizeImageToJpeg(
+				blob,
+				THUMBNAIL_MAX_EDGE,
+				JPEG_QUALITY
+			);
+
+			return {
+				sourceId: sourceImage.id,
+				sourcePhotoId: sourceImage.photoId,
+				createdAt: sourceImage.createdAt,
+				width: sourceImage.width,
+				height: sourceImage.height,
+				sizeBytes: sourceImage.sizeBytes,
+				mimeType: sourceImage.mimeType,
+				blob,
+				thumbnailBlob: thumbnailPrepared.blob,
+			};
+		})
+	);
+
+	const preparedImagesByPhoto = new Map<string, typeof preparedImages>();
+	for (const image of preparedImages) {
+		const list = preparedImagesByPhoto.get(image.sourcePhotoId) ?? [];
+		list.push(image);
+		preparedImagesByPhoto.set(image.sourcePhotoId, list);
+	}
+
+	const existingSourceAlbum = await getAlbum(parsed.meta.sourceAlbumId);
+	let importedTitle = sourceAlbum.title;
+	if (existingSourceAlbum && existingSourceAlbum.title === sourceAlbum.title) {
+		const existingAlbums = await listAlbums();
+		importedTitle = withIncrementedSuffix(
+			sourceAlbum.title,
+			existingAlbums.map((album) => album.title)
+		);
+	}
+
+	const db = await getDb();
+	const tx = db.transaction([ALBUM_STORE, PHOTO_STORE, PHOTO_IMAGE_STORE], "readwrite");
+	const albumStore = tx.objectStore(ALBUM_STORE);
+	const photoStore = tx.objectStore(PHOTO_STORE);
+	const imageStore = tx.objectStore(PHOTO_IMAGE_STORE);
+
+	const importedAlbum: Album = {
+		id: newAlbumId,
+		title: importedTitle,
+		createdAt: sourceAlbum.createdAt,
+		updatedAt: importedAt,
+		photoCount: 0,
+	};
+
+	let importedPhotoCount = 0;
+	for (const sourcePhoto of sourcePhotos) {
+		const relatedImages = (imagesByPhoto.get(sourcePhoto.id) ?? []).sort((a, b) => b.createdAt - a.createdAt);
+		const relatedPreparedImages = (preparedImagesByPhoto.get(sourcePhoto.id) ?? []).sort(
+			(a, b) => b.createdAt - a.createdAt
+		);
+		if (relatedImages.length === 0) {
+			continue;
+		}
+
+		const newPhotoId = photoIdMap.get(sourcePhoto.id);
+		if (!newPhotoId) {
+			continue;
+		}
+
+		const newCoverImageId = imageIdMap.get(sourcePhoto.coverImageId ?? relatedImages[0].id);
+		const storedPhoto: StoredPhoto = {
+			id: newPhotoId,
+			albumId: newAlbumId,
+			createdAt: sourcePhoto.createdAt,
+			updatedAt: sourcePhoto.updatedAt,
+			imageCount: relatedImages.length,
+			coverImageId: newCoverImageId,
+			memo: sourcePhoto.memo,
+		};
+		photoStore.add(storedPhoto);
+
+		for (const sourceImage of relatedImages) {
+			const newImageId = imageIdMap.get(sourceImage.id);
+			if (!newImageId) {
+				continue;
+			}
+
+			const preparedImage = relatedPreparedImages.find((item) => item.sourceId === sourceImage.id);
+			if (!preparedImage) {
+				continue;
+			}
+
+			const image: PhotoImage = {
+				id: newImageId,
+				photoId: newPhotoId,
+				createdAt: sourceImage.createdAt,
+				width: sourceImage.width,
+				height: sourceImage.height,
+				sizeBytes: sourceImage.sizeBytes,
+				mimeType: sourceImage.mimeType,
+				blob: preparedImage.blob,
+				thumbnailBlob: preparedImage.thumbnailBlob,
+			};
+			imageStore.add(image);
+		}
+
+		importedPhotoCount += 1;
+	}
+
+	if (importedPhotoCount === 0) {
+		tx.abort();
+		throw new Error("インポート可能な画像データがありませんでした。");
+	}
+
+	albumStore.add({
+		...importedAlbum,
+		photoCount: importedPhotoCount,
+	});
+
+	await completeTx(tx);
+	return {
+		...importedAlbum,
+		photoCount: importedPhotoCount,
+	};
 };
 
 export const addPhotoToAlbum = async (
