@@ -11,10 +11,17 @@ import {
   IonPage,
   IonPopover,
   IonToolbar,
-  useIonRouter
+  useIonRouter,
 } from "@ionic/react";
 import { chevronBack, createOutline, ellipsisHorizontal } from "ionicons/icons";
-import { useCallback, useEffect, useRef, useState, type SyntheticEvent, type TouchEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type SyntheticEvent,
+  type TouchEvent,
+} from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
 import { useAlbumMutations } from "../hooks/useAlbumMutations";
@@ -440,7 +447,11 @@ export const PhotoViewPage = () => {
 
 	const onImageTouchEnd = (event: TouchEvent<HTMLImageElement>) => {
 		const now = Date.now();
-		if (!pinchRef.current.active && event.changedTouches.length === 1 && event.touches.length === 0) {
+		if (
+			!pinchRef.current.active &&
+			event.changedTouches.length === 1 &&
+			event.touches.length === 0
+		) {
 			const touch = event.changedTouches[0];
 			const elapsed = now - lastTapRef.current.time;
 			const dx = touch.clientX - lastTapRef.current.x;
@@ -526,7 +537,9 @@ export const PhotoViewPage = () => {
 										className="photo-slide"
 										key={image.id}
 										aria-hidden={!isCurrent}
-										style={{ visibility: zoomScale > MIN_ZOOM && !isCurrent ? "hidden" : "visible" }}>
+										style={{
+											visibility: zoomScale > MIN_ZOOM && !isCurrent ? "hidden" : "visible",
+										}}>
 										<img
 											src={image.src}
 											alt="撮影画像の拡大表示"
@@ -561,13 +574,25 @@ export const PhotoViewPage = () => {
 							</div>
 						)}
 						<div className="photo-zoom-controls" aria-label="画像ズーム操作">
-							<IonButton fill="clear" size="small" onClick={onZoomOut} disabled={zoomScale <= MIN_ZOOM}>
+							<IonButton
+								fill="clear"
+								size="small"
+								onClick={onZoomOut}
+								disabled={zoomScale <= MIN_ZOOM}>
 								-
 							</IonButton>
-							<IonButton fill="clear" size="small" onClick={onZoomReset} disabled={zoomScale === MIN_ZOOM}>
+							<IonButton
+								fill="clear"
+								size="small"
+								onClick={onZoomReset}
+								disabled={zoomScale === MIN_ZOOM}>
 								{Math.round(zoomScale * 100)}%
 							</IonButton>
-							<IonButton fill="clear" size="small" onClick={onZoomIn} disabled={zoomScale >= MAX_ZOOM}>
+							<IonButton
+								fill="clear"
+								size="small"
+								onClick={onZoomIn}
+								disabled={zoomScale >= MAX_ZOOM}>
 								+
 							</IonButton>
 						</div>
@@ -589,39 +614,46 @@ export const PhotoViewPage = () => {
 			</IonContent>
 
 			{hasPhoto && (
-			<>
-				<IonFab slot="fixed" vertical="bottom" horizontal="end">
-					<IonFabButton onClick={() => void onEditMemo()} disabled={busy} aria-label="メモを編集">
-						<IonIcon icon={createOutline} />
-					</IonFabButton>
-				</IonFab>
+				<>
+					<IonFab slot="fixed" vertical="bottom" horizontal="end">
+						<IonFabButton
+							className="photo-memo-fab"
+							onClick={() => void onEditMemo()}
+							disabled={busy}
+							aria-label="メモを編集">
+							<span className="photo-memo-fab-content" aria-hidden="true">
+								<IonIcon icon={createOutline} />
+								<span className="photo-memo-fab-label">コメント</span>
+							</span>
+						</IonFabButton>
+					</IonFab>
 
-				<IonPopover
-					trigger={menuTriggerId}
-					triggerAction="click"
-					side="bottom"
-					alignment="end"
-					showBackdrop={false}
-					dismissOnSelect
-					className="album-menu-popover">
-					<IonList className="album-menu-list">
-						<IonItem button onClick={onAddImageClick}>
-							画像を追加
-						</IonItem>
-						<IonItem
-							button
-							lines="none"
-							className="menu-item-danger"
-							disabled={busy || displayImages.length === 0}
-							onClick={() => {
-								void onDeleteCurrentImage();
-							}}>
-							現在の画像を削除
-						</IonItem>
-					</IonList>
-				</IonPopover>
-			</>
-		)}
+					<IonPopover
+						trigger={menuTriggerId}
+						triggerAction="click"
+						side="bottom"
+						alignment="end"
+						showBackdrop={false}
+						dismissOnSelect
+						className="album-menu-popover">
+						<IonList className="album-menu-list">
+							<IonItem button onClick={onAddImageClick}>
+								画像を追加
+							</IonItem>
+							<IonItem
+								button
+								lines="none"
+								className="menu-item-danger"
+								disabled={busy || displayImages.length === 0}
+								onClick={() => {
+									void onDeleteCurrentImage();
+								}}>
+								現在の画像を削除
+							</IonItem>
+						</IonList>
+					</IonPopover>
+				</>
+			)}
 			<input
 				ref={fileInputRef}
 				hidden

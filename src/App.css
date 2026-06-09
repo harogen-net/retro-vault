@@ -320,6 +320,27 @@ ion-fab-button {
   --box-shadow: 0 10px 24px rgba(8, 12, 24, 0.45);
 }
 
+.photo-memo-fab-content {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  gap: 0.1rem;
+}
+
+.photo-memo-fab-content ion-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.photo-memo-fab-label {
+  font-size: 0.6rem;
+  line-height: 1;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 ion-toolbar {
   --background: #0e1422;
   --color: var(--ink-main);
