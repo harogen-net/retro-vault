@@ -19,7 +19,7 @@ import {
 	useIonRouter,
 	useIonViewWillEnter,
 } from "@ionic/react";
-import { add, checkboxOutline, checkmarkCircle, ellipsisHorizontal } from "ionicons/icons";
+import { add, checkboxOutline, checkmarkCircle, chevronBack, ellipsisHorizontal } from "ionicons/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
@@ -612,8 +612,8 @@ export const AlbumDetailPage = () => {
 				<IonHeader translucent>
 					<IonToolbar>
 						<IonButtons slot="start">
-							<IonButton fill="clear" onClick={backToAlbums}>
-								一覧
+							<IonButton fill="clear" onClick={backToAlbums} aria-label="戻る">
+								<IonIcon slot="icon-only" icon={chevronBack} />
 							</IonButton>
 						</IonButtons>
 						<IonTitle>{`${album.title}(${album.photoCount})`}</IonTitle>

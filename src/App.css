@@ -285,7 +285,7 @@
 
 .photo-memo {
   position: absolute;
-  bottom: 0;
+  bottom: calc(var(--app-footer-nav-height) + 0.5rem);
   left: 0;
   right: 0;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
@@ -303,6 +303,7 @@
 
 .photo-memo-text {
   margin: 0;
+  padding-right: 4rem;
   color: rgba(255, 255, 255, 0.9);
   font-size: 0.9rem;
   line-height: 1.5;
@@ -341,6 +342,10 @@ ion-toolbar {
 .album-menu-list ion-item {
   --background: #171f33;
   --color: var(--ink-main);
+}
+
+.menu-item-danger {
+  --color: #ff4444 !important;
 }
 
 .settings-menu-popover::part(content) {
@@ -470,6 +475,16 @@ ion-alert.app-alert .alert-input {
   color: #15283e !important;
   background: #ffffff !important;
   border: 1px solid #8db9d6 !important;
+}
+
+ion-alert.app-alert .alert-input[type="textarea"] {
+  width: 100% !important;
+  min-height: 8rem;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 0.5rem;
+  line-height: 1.5;
 }
 
 ion-alert.app-alert .alert-input::placeholder {

@@ -2,12 +2,18 @@ import {
   IonButton,
   IonButtons,
   IonContent,
+  IonFab,
+  IonFabButton,
   IonHeader,
+  IonIcon,
+  IonItem,
+  IonList,
   IonPage,
-  IonTitle,
+  IonPopover,
   IonToolbar,
-  useIonRouter,
+  useIonRouter
 } from "@ionic/react";
+import { chevronBack, createOutline, ellipsisHorizontal } from "ionicons/icons";
 import { useCallback, useEffect, useRef, useState, type SyntheticEvent, type TouchEvent } from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
@@ -54,6 +60,7 @@ export const PhotoViewPage = () => {
 		y: 0,
 	});
 	const imageNaturalSizeRef = useRef<Record<string, { width: number; height: number }>>({});
+	const menuTriggerId = "photo-view-menu-trigger";
 	const modal = useAppModal();
 	const { savePhotoMemo, addImageToPhotoFromFile, deletePhotoImage } = useAlbumMutations();
 	const {
@@ -485,24 +492,13 @@ export const PhotoViewPage = () => {
 				<IonHeader translucent>
 					<IonToolbar className="photo-toolbar">
 						<IonButtons slot="start">
-							<IonButton fill="clear" onClick={backToAlbum}>
-								戻る
+							<IonButton fill="clear" onClick={backToAlbum} aria-label="戻る">
+								<IonIcon slot="icon-only" icon={chevronBack} />
 							</IonButton>
 						</IonButtons>
-						<IonTitle>{album?.title ?? "Photo"}</IonTitle>
 						<IonButtons slot="end">
-							<IonButton fill="clear" onClick={onAddImageClick} disabled={busy}>
-								追加
-							</IonButton>
-							<IonButton
-								fill="clear"
-								color="danger"
-								onClick={() => void onDeleteCurrentImage()}
-								disabled={busy || displayImages.length === 0}>
-								削除
-							</IonButton>
-							<IonButton fill="clear" onClick={() => void onEditMemo()} disabled={busy}>
-								メモ
+							<IonButton id={menuTriggerId} fill="clear" disabled={busy} aria-label="メニュー">
+								<IonIcon slot="icon-only" icon={ellipsisHorizontal} />
 							</IonButton>
 						</IonButtons>
 					</IonToolbar>
@@ -593,6 +589,40 @@ export const PhotoViewPage = () => {
 				)}
 			</IonContent>
 
+			{hasPhoto && (
+			<>
+				<IonFab slot="fixed" vertical="bottom" horizontal="end">
+					<IonFabButton onClick={() => void onEditMemo()} disabled={busy} aria-label="メモを編集">
+						<IonIcon icon={createOutline} />
+					</IonFabButton>
+				</IonFab>
+
+				<IonPopover
+					trigger={menuTriggerId}
+					triggerAction="click"
+					side="bottom"
+					alignment="end"
+					showBackdrop={false}
+					dismissOnSelect
+					className="album-menu-popover">
+					<IonList className="album-menu-list">
+						<IonItem button onClick={onAddImageClick}>
+							画像を追加
+						</IonItem>
+						<IonItem
+							button
+							lines="none"
+							className="menu-item-danger"
+							disabled={busy || displayImages.length === 0}
+							onClick={() => {
+								void onDeleteCurrentImage();
+							}}>
+							現在の画像を削除
+						</IonItem>
+					</IonList>
+				</IonPopover>
+			</>
+		)}
 			<input
 				ref={fileInputRef}
 				hidden

@@ -91,7 +91,7 @@ export const AppModalProvider = ({ children }: PropsWithChildren) => {
 							inputs: [
 								{
 									name: "value",
-									type: "text",
+									type: "textarea",
 									value: options.defaultValue ?? "",
 									placeholder: options.placeholder ?? "",
 								},
