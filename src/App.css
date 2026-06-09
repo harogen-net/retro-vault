@@ -286,7 +286,7 @@
 
 .photo-memo {
   position: absolute;
-  bottom: calc(var(--app-footer-nav-height) + 0.5rem);
+  bottom: 0;
   left: 0;
   right: 0;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));

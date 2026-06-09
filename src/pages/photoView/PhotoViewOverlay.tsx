@@ -34,7 +34,7 @@ export const PhotoViewOverlay = ({
 					aria-label="メモを編集">
 					<span className="photo-memo-fab-content" aria-hidden="true">
 						<IonIcon icon={createOutline} />
-						<span className="photo-memo-fab-label">コメント</span>
+						<span className="photo-memo-fab-label">メモ</span>
 					</span>
 				</IonFabButton>
 			</IonFab>

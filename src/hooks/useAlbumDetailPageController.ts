@@ -9,7 +9,7 @@ import { useBlobDataUrlList } from "./useBlobDataUrlList";
 
 export const useAlbumDetailPageController = (albumId?: string) => {
 	const [album, setAlbum] = useState<Album | null>(null);
-			const downloadName = `${album.title.replace(/[\\/:*?"<>|]/g, "_") || "album"}.zip`;
+	const [photos, setPhotos] = useState<Photo[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
