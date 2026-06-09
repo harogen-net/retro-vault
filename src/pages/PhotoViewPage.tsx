@@ -1,26 +1,27 @@
 import {
-  IonButton,
-  IonButtons,
-  IonContent,
-  IonFab,
-  IonFabButton,
-  IonHeader,
-  IonIcon,
-  IonItem,
-  IonList,
-  IonPage,
-  IonPopover,
-  IonToolbar,
-  useIonRouter,
+    IonButton,
+    IonButtons,
+    IonContent,
+    IonFab,
+    IonFabButton,
+    IonHeader,
+    IonIcon,
+    IonItem,
+    IonList,
+    IonPage,
+    IonPopover,
+    IonToolbar,
+    useIonRouter,
 } from "@ionic/react";
 import { chevronBack, createOutline, ellipsisHorizontal } from "ionicons/icons";
 import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type SyntheticEvent,
-  type TouchEvent,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    type MouseEvent,
+    type SyntheticEvent,
+    type TouchEvent,
 } from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
@@ -157,6 +158,37 @@ export const PhotoViewPage = () => {
 		[currentIndex, displayImages, MIN_ZOOM]
 	);
 
+	const getCurrentImageMetrics = useCallback(() => {
+		if (!carouselRef.current || displayImages.length === 0) {
+			return null;
+		}
+
+		const containerWidth = carouselRef.current.clientWidth;
+		const containerHeight = carouselRef.current.clientHeight;
+		const current = displayImages[currentIndex];
+		if (!current) {
+			return null;
+		}
+
+		const natural = imageNaturalSizeRef.current[current.id];
+		if (!natural || natural.width <= 0 || natural.height <= 0) {
+			return null;
+		}
+
+		const imageRatio = natural.width / natural.height;
+		const containerRatio = containerWidth / Math.max(containerHeight, 1);
+
+		let baseWidth = containerWidth;
+		let baseHeight = containerHeight;
+		if (imageRatio > containerRatio) {
+			baseHeight = containerWidth / imageRatio;
+		} else {
+			baseWidth = containerHeight * imageRatio;
+		}
+
+		return { baseWidth, baseHeight, containerWidth, containerHeight };
+	}, [currentIndex, displayImages]);
+
 	const clampPan = useCallback(
 		(nextPan: { x: number; y: number }, scale: number) => {
 			const bounds = getPanBounds(scale);
@@ -166,6 +198,37 @@ export const PhotoViewPage = () => {
 			};
 		},
 		[getPanBounds]
+	);
+
+	const getZoomPanForPoint = useCallback(
+		(point: { x: number; y: number }, nextScale: number) => {
+			if (nextScale <= MIN_ZOOM) {
+				return { x: 0, y: 0 };
+			}
+
+			const metrics = getCurrentImageMetrics();
+			if (!metrics) {
+				return clampPan(pan, nextScale);
+			}
+
+			const { baseWidth, baseHeight, containerWidth, containerHeight } = metrics;
+			const offsetX = Math.max(
+				-baseWidth / 2,
+				Math.min(baseWidth / 2, point.x - containerWidth / 2)
+			);
+			const offsetY = Math.max(
+				-baseHeight / 2,
+				Math.min(baseHeight / 2, point.y - containerHeight / 2)
+			);
+			const safeCurrentScale = Math.max(zoomScale, MIN_ZOOM);
+			const nextPan = {
+				x: offsetX - ((offsetX - pan.x) / safeCurrentScale) * nextScale,
+				y: offsetY - ((offsetY - pan.y) / safeCurrentScale) * nextScale,
+			};
+
+			return clampPan(nextPan, nextScale);
+		},
+		[clampPan, getCurrentImageMetrics, MIN_ZOOM, pan, zoomScale]
 	);
 
 	const touchDistance = (touches: TouchEvent<HTMLImageElement>["touches"]) => {
@@ -316,6 +379,8 @@ export const PhotoViewPage = () => {
 		}
 	};
 
+	// Keep the current slide and zoom state in sync when the backing image list changes.
+	/* eslint-disable react-hooks/set-state-in-effect */
 	useEffect(() => {
 		if (!carouselRef.current) {
 			return;
@@ -333,6 +398,7 @@ export const PhotoViewPage = () => {
 		setPan({ x: 0, y: 0 });
 		carouselRef.current.scrollTo({ left: 0, top: 0 });
 	}, [displayImages.length, MIN_ZOOM]);
+	/* eslint-enable react-hooks/set-state-in-effect */
 
 	const onCarouselScroll = () => {
 		if (pinchRef.current.active) {
@@ -374,7 +440,7 @@ export const PhotoViewPage = () => {
 		setPan({ x: 0, y: 0 });
 	};
 
-	const onZoomToggle = () => {
+	const onZoomToggle = (point?: { x: number; y: number }) => {
 		setZoomScale((current) => {
 			if (current > MIN_ZOOM) {
 				setPan({ x: 0, y: 0 });
@@ -382,7 +448,7 @@ export const PhotoViewPage = () => {
 			}
 
 			const next = clampZoom(DOUBLE_TAP_ZOOM);
-			setPan((prev) => clampPan(prev, next));
+			setPan(point ? getZoomPanForPoint(point, next) : clampPan(pan, next));
 			return next;
 		});
 	};
@@ -459,7 +525,11 @@ export const PhotoViewPage = () => {
 			const near = dx * dx + dy * dy < 36 * 36;
 
 			if (elapsed > 0 && elapsed <= DOUBLE_TAP_MS && near) {
-				onZoomToggle();
+				const rect = event.currentTarget.getBoundingClientRect();
+				onZoomToggle({
+					x: touch.clientX - rect.left,
+					y: touch.clientY - rect.top,
+				});
 				lastTapRef.current.time = 0;
 			} else {
 				lastTapRef.current = {
@@ -479,11 +549,13 @@ export const PhotoViewPage = () => {
 		}
 	};
 
-	const onImageDoubleClick = () => {
-		onZoomToggle();
+	const onImageDoubleClick = (event: MouseEvent<HTMLImageElement>) => {
+		const rect = event.currentTarget.getBoundingClientRect();
+		onZoomToggle({
+			x: event.clientX - rect.left,
+			y: event.clientY - rect.top,
+		});
 	};
-
-	const currentImageId = displayImages[currentIndex]?.id;
 
 	const onImageLoad = (imageId: string, event: SyntheticEvent<HTMLImageElement>) => {
 		imageNaturalSizeRef.current[imageId] = {
@@ -568,11 +640,7 @@ export const PhotoViewPage = () => {
 								{currentIndex + 1} / {displayImages.length}
 							</div>
 						)}
-						{currentImageId && zoomScale > MIN_ZOOM && (
-							<div className="photo-pan-hint" aria-hidden="true">
-								ドラッグで移動 / ダブルタップで戻す
-							</div>
-						)}
+
 						<div className="photo-zoom-controls" aria-label="画像ズーム操作">
 							<IonButton
 								fill="clear"
