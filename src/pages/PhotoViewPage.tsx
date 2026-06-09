@@ -1,32 +1,26 @@
 import {
-    IonButton,
-    IonButtons,
-    IonContent,
-    IonFab,
-    IonFabButton,
-    IonHeader,
-    IonIcon,
-    IonItem,
-    IonList,
-    IonPage,
-    IonPopover,
-    IonToolbar,
-    useIonRouter,
+	IonPage,
+	useIonRouter,
 } from "@ionic/react";
-import { chevronBack, createOutline, ellipsisHorizontal } from "ionicons/icons";
 import {
-    useCallback,
-    useEffect,
-    useRef,
-    useState,
-    type MouseEvent,
-    type SyntheticEvent,
-    type TouchEvent,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type MouseEvent,
+	type SyntheticEvent,
+	type TouchEvent,
 } from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
 import { useAlbumMutations } from "../hooks/useAlbumMutations";
+import { useBlobDataUrlList } from "../hooks/useBlobDataUrlList";
 import { usePhoto } from "../hooks/usePhoto";
+import type { PhotoImage } from "../types";
+import { PhotoViewHeader } from "./photoView/PhotoViewHeader";
+import { PhotoViewOverlay } from "./photoView/PhotoViewOverlay";
+import { PhotoViewStage, type PhotoViewDisplayImage } from "./photoView/PhotoViewStage";
 
 export const PhotoViewPage = () => {
 	const MIN_ZOOM = 1;
@@ -41,7 +35,6 @@ export const PhotoViewPage = () => {
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [zoomScale, setZoomScale] = useState(MIN_ZOOM);
 	const [pan, setPan] = useState({ x: 0, y: 0 });
-	const [displayImages, setDisplayImages] = useState<Array<{ id: string; src: string }>>([]);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const carouselRef = useRef<HTMLDivElement | null>(null);
 	const pinchRef = useRef<{ active: boolean; startDistance: number; startScale: number }>({
@@ -83,34 +76,20 @@ export const PhotoViewPage = () => {
 		reload,
 	} = usePhoto(albumId, photoId);
 
-	const toSafeBlob = (blob: Blob, mimeType?: string) => {
-		if (blob.type) {
-			return blob;
+	const imageDisplayImages = useBlobDataUrlList<PhotoImage, PhotoViewDisplayImage>({
+		items: images,
+		getBlob: useCallback((image) => image.blob, []),
+		getMimeType: useCallback((image) => image.mimeType, []),
+		mapResult: useCallback((image, src: string) => ({ id: image.id, src }), []),
+	});
+
+	const displayImages = useMemo<PhotoViewDisplayImage[]>(() => {
+		if (images.length > 0) {
+			return imageDisplayImages;
 		}
 
-		return new Blob([blob], { type: mimeType || "image/jpeg" });
-	};
-
-	const toDataUrl = useCallback((blob: Blob, mimeType?: string) => {
-		return new Promise<string>((resolve, reject) => {
-			const safeBlob = toSafeBlob(blob, mimeType);
-			const reader = new FileReader();
-
-			reader.onload = () => {
-				if (typeof reader.result === "string") {
-					resolve(reader.result);
-					return;
-				}
-
-				reject(new Error("画像変換に失敗しました。"));
-			};
-
-			reader.onerror = () => {
-				reject(reader.error ?? new Error("画像変換に失敗しました。"));
-			};
-			reader.readAsDataURL(safeBlob);
-		});
-	}, []);
+		return photoUrl ? [{ id: photo?.id ?? "fallback-photo", src: photoUrl }] : [];
+	}, [imageDisplayImages, images.length, photo?.id, photoUrl]);
 
 	const clampZoom = useCallback(
 		(value: number) => {
@@ -240,44 +219,6 @@ export const PhotoViewPage = () => {
 		const dy = touches[0].clientY - touches[1].clientY;
 		return Math.hypot(dx, dy);
 	};
-
-	useEffect(() => {
-		let cancelled = false;
-
-		const loadDisplayImages = async () => {
-			if (images.length === 0) {
-				if (!cancelled) {
-					const fallback = photoUrl ? [{ id: photo?.id ?? "fallback-photo", src: photoUrl }] : [];
-					setDisplayImages(fallback);
-				}
-				return;
-			}
-
-			const next: Array<{ id: string; src: string }> = [];
-			for (const image of images) {
-				if (!image.blob) {
-					continue;
-				}
-
-				try {
-					const src = await toDataUrl(image.blob, image.mimeType);
-					next.push({ id: image.id, src });
-				} catch {
-					// Skip broken image while rendering others.
-				}
-			}
-
-			if (!cancelled) {
-				setDisplayImages(next);
-			}
-		};
-
-		void loadDisplayImages();
-
-		return () => {
-			cancelled = true;
-		};
-	}, [images, photo?.id, photoUrl, toDataUrl]);
 
 	const backToAlbum = () => {
 		if (router.canGoBack()) {
@@ -570,158 +511,48 @@ export const PhotoViewPage = () => {
 
 	return (
 		<IonPage className="photo-view-page">
-			{hasPhoto && (
-				<IonHeader translucent>
-					<IonToolbar className="photo-toolbar">
-						<IonButtons slot="start">
-							<IonButton fill="clear" onClick={backToAlbum} aria-label="戻る">
-								<IonIcon slot="icon-only" icon={chevronBack} />
-							</IonButton>
-						</IonButtons>
-						<IonButtons slot="end">
-							<IonButton id={menuTriggerId} fill="clear" disabled={busy} aria-label="メニュー">
-								<IonIcon slot="icon-only" icon={ellipsisHorizontal} />
-							</IonButton>
-						</IonButtons>
-					</IonToolbar>
-				</IonHeader>
-			)}
+			<PhotoViewHeader
+				hasPhoto={hasPhoto}
+				busy={busy}
+				menuTriggerId={menuTriggerId}
+				onBackToAlbum={backToAlbum}
+			/>
 
-			<IonContent
-				fullscreen={hasPhoto}
-				scrollY={!hasPhoto}
-				className={hasPhoto ? "photo-content" : "ion-padding"}>
-				{loading ? (
-					<p className="state-text">読み込み中...</p>
-				) : hasPhoto ? (
-					<section className="photo-stage">
-						<div
-							className="photo-carousel"
-							ref={carouselRef}
-							onScroll={onCarouselScroll}
-							style={{ overflowX: zoomScale > MIN_ZOOM ? "hidden" : "auto" }}>
-							{displayImages.map((image, index) => {
-								const isCurrent = index === currentIndex;
-								const slideZoom = isCurrent ? zoomScale : MIN_ZOOM;
+			<PhotoViewStage
+				loading={loading}
+				hasPhoto={hasPhoto}
+				error={error}
+				errorMessage={errorMessage}
+				photoMemo={photo?.memo}
+				displayImages={displayImages}
+				currentIndex={currentIndex}
+				zoomScale={zoomScale}
+				pan={pan}
+				minZoom={MIN_ZOOM}
+				maxZoom={MAX_ZOOM}
+				carouselRef={carouselRef}
+				onBackToAlbum={backToAlbum}
+				onCarouselScroll={onCarouselScroll}
+				onZoomOut={onZoomOut}
+				onZoomReset={onZoomReset}
+				onZoomIn={onZoomIn}
+				onImageDoubleClick={onImageDoubleClick}
+				onImageLoad={onImageLoad}
+				onImageTouchStart={onImageTouchStart}
+				onImageTouchMove={onImageTouchMove}
+				onImageTouchEnd={onImageTouchEnd}
+				onImageError={() => setError("画像の表示に失敗しました。")}
+			/>
 
-								return (
-									<article
-										className="photo-slide"
-										key={image.id}
-										aria-hidden={!isCurrent}
-										style={{
-											visibility: zoomScale > MIN_ZOOM && !isCurrent ? "hidden" : "visible",
-										}}>
-										<img
-											src={image.src}
-											alt="撮影画像の拡大表示"
-											className="photo-fullscreen"
-											style={{
-												transform: isCurrent
-													? `translate(${pan.x}px, ${pan.y}px) scale(${slideZoom})`
-													: `scale(${slideZoom})`,
-												touchAction: isCurrent && zoomScale > MIN_ZOOM ? "none" : "pan-x pan-y",
-											}}
-											loading="eager"
-											onDoubleClick={isCurrent ? onImageDoubleClick : undefined}
-											onLoad={(event) => onImageLoad(image.id, event)}
-											onTouchStart={isCurrent ? onImageTouchStart : undefined}
-											onTouchMove={isCurrent ? onImageTouchMove : undefined}
-											onTouchEnd={isCurrent ? onImageTouchEnd : undefined}
-											onTouchCancel={isCurrent ? onImageTouchEnd : undefined}
-											onError={() => setError("画像の表示に失敗しました。")}
-										/>
-									</article>
-								);
-							})}
-						</div>
-						{displayImages.length > 1 && (
-							<div className="photo-carousel-indicator" aria-live="polite">
-								{currentIndex + 1} / {displayImages.length}
-							</div>
-						)}
-
-						<div className="photo-zoom-controls" aria-label="画像ズーム操作">
-							<IonButton
-								fill="clear"
-								size="small"
-								onClick={onZoomOut}
-								disabled={zoomScale <= MIN_ZOOM}>
-								-
-							</IonButton>
-							<IonButton
-								fill="clear"
-								size="small"
-								onClick={onZoomReset}
-								disabled={zoomScale === MIN_ZOOM}>
-								{Math.round(zoomScale * 100)}%
-							</IonButton>
-							<IonButton
-								fill="clear"
-								size="small"
-								onClick={onZoomIn}
-								disabled={zoomScale >= MAX_ZOOM}>
-								+
-							</IonButton>
-						</div>
-						{photo.memo && (
-							<div className="photo-memo">
-								<p className="photo-memo-text">{photo.memo}</p>
-							</div>
-						)}
-						{error && <p className="error-banner photo-error">{error}</p>}
-					</section>
-				) : (
-					<>
-						<p className="error-banner">{errorMessage}</p>
-						<button type="button" className="back-link back-button" onClick={backToAlbum}>
-							アルバムへ戻る
-						</button>
-					</>
-				)}
-			</IonContent>
-
-			{hasPhoto && (
-				<>
-					<IonFab slot="fixed" vertical="bottom" horizontal="end">
-						<IonFabButton
-							className="photo-memo-fab"
-							onClick={() => void onEditMemo()}
-							disabled={busy}
-							aria-label="メモを編集">
-							<span className="photo-memo-fab-content" aria-hidden="true">
-								<IonIcon icon={createOutline} />
-								<span className="photo-memo-fab-label">コメント</span>
-							</span>
-						</IonFabButton>
-					</IonFab>
-
-					<IonPopover
-						trigger={menuTriggerId}
-						triggerAction="click"
-						side="bottom"
-						alignment="end"
-						showBackdrop={false}
-						dismissOnSelect
-						className="album-menu-popover">
-						<IonList className="album-menu-list">
-							<IonItem button onClick={onAddImageClick}>
-								画像を追加
-							</IonItem>
-							<IonItem
-								button
-								lines="none"
-								className="menu-item-danger"
-								disabled={busy || displayImages.length === 0}
-								onClick={() => {
-									void onDeleteCurrentImage();
-								}}>
-								現在の画像を削除
-							</IonItem>
-						</IonList>
-					</IonPopover>
-				</>
-			)}
+			<PhotoViewOverlay
+				hasPhoto={hasPhoto}
+				busy={busy}
+				menuTriggerId={menuTriggerId}
+				canDeleteCurrentImage={displayImages.length > 0}
+				onEditMemo={onEditMemo}
+				onAddImageClick={onAddImageClick}
+				onDeleteCurrentImage={onDeleteCurrentImage}
+			/>
 			<input
 				ref={fileInputRef}
 				hidden
