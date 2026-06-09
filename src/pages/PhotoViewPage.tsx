@@ -1,16 +1,16 @@
 import {
-    IonPage,
-    useIonRouter,
+	IonPage,
+	useIonRouter,
 } from "@ionic/react";
 import {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-    type MouseEvent,
-    type SyntheticEvent,
-    type TouchEvent,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type MouseEvent,
+	type SyntheticEvent,
+	type TouchEvent,
 } from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
@@ -26,7 +26,7 @@ export const PhotoViewPage = () => {
 	const MIN_ZOOM = 1;
 	const MAX_ZOOM = 4;
 	const ZOOM_STEP = 0.5;
-	const DOUBLE_TAP_FALLBACK_ZOOM = 2;
+	const DOUBLE_TAP_ZOOM = 2;
 	const DOUBLE_TAP_MS = 280;
 
 	const { albumId, photoId } = useParams<{ albumId: string; photoId: string }>();
@@ -210,18 +210,6 @@ export const PhotoViewPage = () => {
 		},
 		[clampPan, getCurrentImageMetrics, MIN_ZOOM, pan, zoomScale]
 	);
-
-	const getDoubleTapZoomScale = useCallback(() => {
-		const metrics = getCurrentImageMetrics();
-		if (!metrics) {
-			return clampZoom(DOUBLE_TAP_FALLBACK_ZOOM);
-		}
-
-		const widthScale = metrics.containerWidth / Math.max(metrics.baseWidth, 1);
-		const heightScale = metrics.containerHeight / Math.max(metrics.baseHeight, 1);
-		const coverScale = Math.max(widthScale, heightScale);
-		return clampZoom(coverScale);
-	}, [clampZoom, getCurrentImageMetrics]);
 
 	const touchDistance = (touches: TouchEvent<HTMLImageElement>["touches"]) => {
 		if (touches.length < 2) {
@@ -408,7 +396,7 @@ export const PhotoViewPage = () => {
 				return MIN_ZOOM;
 			}
 
-			const next = getDoubleTapZoomScale();
+			const next = clampZoom(DOUBLE_TAP_ZOOM);
 			setPan(point ? getZoomPanForPoint(point, next) : clampPan(pan, next));
 			return next;
 		});
