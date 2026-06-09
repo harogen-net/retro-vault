@@ -6,7 +6,6 @@ import {
 	IonContent,
 	IonFab,
 	IonFabButton,
-	IonFooter,
 	IonGrid,
 	IonHeader,
 	IonIcon,
@@ -15,18 +14,17 @@ import {
 	IonPage,
 	IonPopover,
 	IonRow,
-	IonText,
 	IonTitle,
 	IonToolbar,
 	useIonRouter,
 	useIonViewWillEnter,
 } from "@ionic/react";
-import { add, checkmarkCircle, ellipsisHorizontal } from "ionicons/icons";
+import { add, checkboxOutline, checkmarkCircle, ellipsisHorizontal } from "ionicons/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
 import { useAlbumMutations } from "../hooks/useAlbumMutations";
-import { exportAlbumToZip, getAlbum, importAlbumFromZip, listAlbums, listPhotosByAlbum } from "../lib/db";
+import { exportAlbumToZip, getAlbum, listAlbums, listPhotosByAlbum } from "../lib/db";
 import { formatDateTime } from "../lib/format";
 import type { Album, Photo } from "../types";
 
@@ -51,9 +49,8 @@ type AlbumDetailOverlayProps = {
 	albumOptions: Album[];
 	onAddPhotoClick: () => void;
 	onRenameAlbum: () => Promise<void>;
+	onShowAlbumInfo: () => Promise<void>;
 	onExportAlbum: () => Promise<void>;
-	onImportAlbum: () => void;
-	onToggleSelectionMode: () => void;
 	onDeleteAlbum: () => Promise<void>;
 	onMoveSelected: (targetAlbumId: string) => Promise<void>;
 	onDismissMoveSheet: () => void;
@@ -100,13 +97,7 @@ const AlbumDetailBody = ({
 	}
 
 	return (
-		<section className="screen ion-padding">
-			<section className="detail-meta" aria-label="アルバムメタ情報">
-				<IonText className="meta-line">作成: {formatDateTime(album.createdAt)}</IonText>
-				<IonText className="meta-line">更新: {formatDateTime(album.updatedAt)}</IonText>
-				<IonText className="meta-line">画像: {album.photoCount}枚</IonText>
-			</section>
-
+		<section className={`screen ion-padding ${selectionMode ? "screen-selection-mode" : ""}`}>
 			{error && <p className="error-banner">{error}</p>}
 
 			{photoUrls.length === 0 ? (
@@ -156,9 +147,8 @@ const AlbumDetailOverlay = ({
 	albumOptions,
 	onAddPhotoClick,
 	onRenameAlbum,
+	onShowAlbumInfo,
 	onExportAlbum,
-	onImportAlbum,
-	onToggleSelectionMode,
 	onDeleteAlbum,
 	onMoveSelected,
 	onDismissMoveSheet,
@@ -169,11 +159,13 @@ const AlbumDetailOverlay = ({
 
 	return (
 		<>
-			<IonFab slot="fixed" vertical="bottom" horizontal="end">
-				<IonFabButton onClick={onAddPhotoClick} disabled={busy} aria-label="画像を追加">
-					{busy ? "..." : <IonIcon icon={add} />}
-				</IonFabButton>
-			</IonFab>
+			{!selectionMode && (
+				<IonFab slot="fixed" vertical="bottom" horizontal="end">
+					<IonFabButton onClick={onAddPhotoClick} disabled={busy} aria-label="画像を追加">
+						{busy ? "..." : <IonIcon icon={add} />}
+					</IonFabButton>
+				</IonFab>
+			)}
 
 			<IonPopover
 				trigger={menuTriggerId}
@@ -184,19 +176,16 @@ const AlbumDetailOverlay = ({
 				dismissOnSelect
 				className="album-menu-popover">
 				<IonList className="album-menu-list">
+					<IonItem button onClick={() => void onShowAlbumInfo()}>
+						詳細情報
+					</IonItem>
 					<IonItem button onClick={() => void onRenameAlbum()}>
 						アルバム名変更
 					</IonItem>
 					<IonItem button onClick={() => void onExportAlbum()}>
 						エクスポート
 					</IonItem>
-					<IonItem button onClick={onImportAlbum}>
-						インポート
-					</IonItem>
-					<IonItem button onClick={onToggleSelectionMode}>
-						{selectionMode ? "選択モード終了" : "選択モード開始"}
-					</IonItem>
-					<IonItem button onClick={() => void onDeleteAlbum()}>
+					<IonItem button lines="none" onClick={() => void onDeleteAlbum()}>
 						アルバム削除
 					</IonItem>
 				</IonList>
@@ -237,31 +226,29 @@ const AlbumDetailFooter = ({
 	}
 
 	return (
-		<IonFooter>
-			<IonToolbar>
-				<div className="selection-actions">
-					<span>{selectedPhotoIds.length}件選択中</span>
-					<div className="selection-actions-buttons">
-						<IonButton
-							fill="clear"
-							onClick={() => void onOpenMoveSheet()}
-							disabled={busy || selectedPhotoIds.length === 0}>
-							移動
-						</IonButton>
-						<IonButton
-							fill="clear"
-							color="danger"
-							onClick={() => void onDeleteSelected()}
-							disabled={busy || selectedPhotoIds.length === 0}>
-							削除
-						</IonButton>
-						<IonButton fill="clear" onClick={onToggleSelectionMode} disabled={busy}>
-							完了
-						</IonButton>
-					</div>
+		<div className="selection-mode-bar" role="region" aria-label="選択モード操作">
+			<div className="selection-actions">
+				<span>{selectedPhotoIds.length}件選択中</span>
+				<div className="selection-actions-buttons">
+					<IonButton
+						fill="clear"
+						onClick={() => void onOpenMoveSheet()}
+						disabled={busy || selectedPhotoIds.length === 0}>
+						移動
+					</IonButton>
+					<IonButton
+						fill="clear"
+						color="danger"
+						onClick={() => void onDeleteSelected()}
+						disabled={busy || selectedPhotoIds.length === 0}>
+						削除
+					</IonButton>
+					<IonButton fill="clear" onClick={onToggleSelectionMode} disabled={busy}>
+						完了
+					</IonButton>
 				</div>
-			</IonToolbar>
-		</IonFooter>
+			</div>
+		</div>
 	);
 };
 
@@ -280,7 +267,6 @@ export const AlbumDetailPage = () => {
 		Array<{ id: string; src: string; createdAt: number; memo: string | undefined }>
 	>([]);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
-	const importInputRef = useRef<HTMLInputElement | null>(null);
 	const router = useIonRouter();
 	const menuTriggerId = "album-detail-menu-trigger";
 	const modal = useAppModal();
@@ -424,30 +410,6 @@ export const AlbumDetailPage = () => {
 			URL.revokeObjectURL(url);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : "エクスポートに失敗しました。");
-		} finally {
-			setBusy(false);
-		}
-	};
-
-	const onImportAlbum = () => {
-		importInputRef.current?.click();
-	};
-
-	const onImportZip = async (event: React.ChangeEvent<HTMLInputElement>) => {
-		const [file] = event.target.files ?? [];
-		event.target.value = "";
-
-		if (!file) {
-			return;
-		}
-
-		try {
-			setBusy(true);
-			setError(null);
-			const imported = await importAlbumFromZip(file);
-			router.push(`/albums/${encodeURIComponent(imported.id)}`, "forward", "push");
-		} catch (e) {
-			setError(e instanceof Error ? e.message : "インポートに失敗しました。");
 		} finally {
 			setBusy(false);
 		}
@@ -619,6 +581,18 @@ export const AlbumDetailPage = () => {
 		}
 	};
 
+	const onShowAlbumInfo = async () => {
+		if (!album) {
+			return;
+		}
+
+		await modal.alert({
+			title: "アルバム詳細情報",
+			message: `作成: ${formatDateTime(album.createdAt)}\n更新: ${formatDateTime(album.updatedAt)}\n記録数: ${album.photoCount}`,
+			confirmText: "閉じる",
+		});
+	};
+
 	const hasAlbum = !!album;
 	const onOpenPhoto = (photoId: string) => {
 		if (!album) {
@@ -642,8 +616,15 @@ export const AlbumDetailPage = () => {
 								一覧
 							</IonButton>
 						</IonButtons>
-						<IonTitle>{album.title}</IonTitle>
+						<IonTitle>{`${album.title}(${album.photoCount})`}</IonTitle>
 						<IonButtons slot="end">
+							<IonButton
+								fill="clear"
+								onClick={toggleSelectionMode}
+								disabled={busy}
+								aria-label={selectionMode ? "選択モード終了" : "選択モード開始"}>
+								<IonIcon slot="icon-only" icon={checkboxOutline} />
+							</IonButton>
 							<IonButton id={menuTriggerId} fill="clear" disabled={busy}>
 								<IonIcon slot="icon-only" icon={ellipsisHorizontal} />
 							</IonButton>
@@ -674,9 +655,8 @@ export const AlbumDetailPage = () => {
 					albumOptions={albumOptions}
 					onAddPhotoClick={onAddPhotoClick}
 					onRenameAlbum={onRenameAlbum}
+					onShowAlbumInfo={onShowAlbumInfo}
 					onExportAlbum={onExportAlbum}
-					onImportAlbum={onImportAlbum}
-					onToggleSelectionMode={toggleSelectionMode}
 					onDeleteAlbum={onDeleteAlbum}
 					onMoveSelected={onMoveSelected}
 					onDismissMoveSheet={() => setMoveSheetOpen(false)}
@@ -700,14 +680,6 @@ export const AlbumDetailPage = () => {
 				type="file"
 				accept="image/*"
 				onChange={onAddPhoto}
-			/>
-			<input
-				ref={importInputRef}
-				hidden
-				className="visually-hidden"
-				type="file"
-				accept=".zip,application/zip"
-				onChange={onImportZip}
 			/>
 		</IonPage>
 	);

@@ -4,6 +4,18 @@
   padding: 1rem 0 5rem;
 }
 
+.app-layout {
+  --app-footer-nav-height: 3.5rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-layout-main {
+  flex: 1;
+  min-height: 0;
+}
+
 .page-subtitle {
   margin: 0.2rem 0 0.8rem;
   color: var(--ink-subtle);
@@ -331,6 +343,60 @@ ion-toolbar {
   --color: var(--ink-main);
 }
 
+.settings-menu-popover::part(content) {
+  width: max-content;
+  max-width: calc(100vw - 1rem);
+  background: #171f33;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  transform-origin: top right;
+  box-shadow: 0 12px 30px rgba(2, 4, 12, 0.5);
+}
+
+.settings-menu-list {
+  --background: #171f33;
+  padding: 4px 0;
+}
+
+.settings-menu-list ion-item {
+  --background: #171f33;
+  --color: var(--ink-main);
+  white-space: nowrap;
+}
+
+.footer-nav-button {
+  --padding-start: 0.5rem;
+  --padding-end: 0.5rem;
+  min-height: 3rem;
+}
+
+.footer-nav-button-inner {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+  line-height: 1.1;
+}
+
+.footer-nav-button-inner ion-icon {
+  font-size: 1rem;
+}
+
+.footer-nav-button-label {
+  font-size: 0.7rem;
+}
+
+.app-footer-nav-toolbar {
+  --min-height: var(--app-footer-nav-height);
+  --padding-top: 0.25rem;
+  --padding-bottom: 0.25rem;
+}
+
+ion-fab[slot="fixed"][vertical="bottom"] {
+  margin-bottom: calc(var(--app-footer-nav-height) + env(safe-area-inset-bottom, 0px) + 0.4rem);
+}
+
 .selection-actions {
   display: flex;
   align-items: center;
@@ -344,6 +410,30 @@ ion-toolbar {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+.selection-mode-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--app-footer-nav-height) + env(safe-area-inset-bottom, 0px) + 0.3rem);
+  z-index: 20;
+  padding: 0 0.5rem;
+  pointer-events: none;
+}
+
+.selection-mode-bar .selection-actions {
+  width: min(1080px, 100% - 1rem);
+  margin: 0 auto;
+  background: #0e1422;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 0.35rem 0.65rem;
+  pointer-events: auto;
+}
+
+.screen-selection-mode {
+  padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 .visually-hidden {

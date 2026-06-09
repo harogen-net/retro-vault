@@ -1,6 +1,4 @@
 import {
-  IonButton,
-  IonButtons,
   IonContent,
   IonFab,
   IonFabButton,
@@ -11,18 +9,16 @@ import {
   IonList,
   IonNote,
   IonPage,
-  IonPopover,
   IonText,
   IonTitle,
   IonToolbar,
   useIonRouter,
   useIonViewWillEnter,
 } from "@ionic/react";
-import { add, ellipsisHorizontal } from "ionicons/icons";
+import { add } from "ionicons/icons";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useAppModal } from "../components/appModalContext";
 import { useAlbumMutations } from "../hooks/useAlbumMutations";
-import { APP_DEPLOY_ID, APP_REVISION, APP_VERSION } from "../lib/appVersion";
 import { listAlbums } from "../lib/db";
 import { formatDateTime } from "../lib/format";
 import type { Album } from "../types";
@@ -51,7 +47,6 @@ export const AlbumsPage = () => {
 	const router = useIonRouter();
 	const modal = useAppModal();
 	const { createAlbumWithPhotos } = useAlbumMutations();
-	const menuTriggerId = "albums-menu-trigger";
 
 	const albumCountLabel = useMemo(() => {
 		if (albums.length === 0) {
@@ -137,55 +132,6 @@ export const AlbumsPage = () => {
 		fileInputRef.current?.click();
 	};
 
-	const onShowVersionInfo = useCallback(async () => {
-		await modal.alert({
-			title: "バージョン情報",
-			message: `version: ${APP_VERSION}\ndeploy: ${APP_DEPLOY_ID}\nhash: ${APP_REVISION}`,
-			confirmText: "閉じる",
-		});
-	}, [modal]);
-
-	const onReloadApp = useCallback(async () => {
-		const shouldReload = await modal.confirm({
-			title: "アプリのリロード",
-			message: "最新状態を取得するためにアプリを再読み込みします。実行しますか？",
-			confirmText: "リロード",
-			cancelText: "キャンセル",
-		});
-
-		if (!shouldReload) {
-			return;
-		}
-
-		try {
-			if ("serviceWorker" in navigator) {
-				const registrations = await navigator.serviceWorker.getRegistrations();
-				await Promise.all(
-					registrations.map(async (registration) => {
-						try {
-							await registration.update();
-							registration.waiting?.postMessage({ type: "SKIP_WAITING" });
-							await registration.unregister();
-						} catch {
-							// Ignore update failures and continue with reload.
-						}
-					})
-				);
-			}
-
-			if ("caches" in window) {
-				const cacheKeys = await caches.keys();
-				await Promise.all(cacheKeys.map((cacheKey) => caches.delete(cacheKey)));
-			}
-
-			const reloadUrl = new URL(window.location.href);
-			reloadUrl.searchParams.set("app_reload", String(Date.now()));
-			window.location.assign(reloadUrl.toString());
-		} catch {
-			window.location.reload();
-		}
-	}, [modal]);
-
 	const onCaptureNewAlbum = async (event: React.ChangeEvent<HTMLInputElement>) => {
 		const files = Array.from(event.target.files ?? []);
 		event.target.value = "";
@@ -230,11 +176,6 @@ export const AlbumsPage = () => {
 		<IonPage>
 			<IonHeader translucent>
 				<IonToolbar>
-					<IonButtons slot="start">
-						<IonButton id={menuTriggerId} fill="clear" aria-label="メニュー">
-							<IonIcon slot="icon-only" icon={ellipsisHorizontal} />
-						</IonButton>
-					</IonButtons>
 					<IonTitle>Retro Vault</IonTitle>
 				</IonToolbar>
 			</IonHeader>
@@ -294,26 +235,6 @@ export const AlbumsPage = () => {
 				onChange={onCaptureNewAlbum}
 			/>
 
-			<IonPopover trigger={menuTriggerId} dismissOnSelect className="album-menu-popover">
-				<IonList className="album-menu-list" lines="none">
-					<IonItem
-						button
-						detail={false}
-						onClick={() => {
-							void onShowVersionInfo();
-						}}>
-						バージョン情報
-					</IonItem>
-					<IonItem
-						button
-						detail={false}
-						onClick={() => {
-							void onReloadApp();
-						}}>
-						アプリのリロード
-					</IonItem>
-				</IonList>
-			</IonPopover>
 		</IonPage>
 	);
 };
