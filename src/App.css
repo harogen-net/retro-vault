@@ -215,14 +215,13 @@
   object-fit: contain;
   background: #000;
   transform-origin: center center;
-  transition: transform 120ms ease-out;
 }
 
 .photo-fullscreen-full {
   position: absolute;
   inset: 0;
   opacity: 0;
-  transition: opacity 160ms ease-out;
+  transition: opacity 0.3s ease-in-out;
 }
 
 .photo-fullscreen-full.is-ready {

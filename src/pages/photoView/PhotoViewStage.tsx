@@ -16,6 +16,7 @@ type PhotoViewStageProps = {
 	currentIndex: number;
 	zoomScale: number;
 	pan: { x: number; y: number };
+	zoomAnimated: boolean;
 	minZoom: number;
 	maxZoom: number;
 	carouselRef: RefObject<HTMLDivElement | null>;
@@ -42,6 +43,7 @@ export const PhotoViewStage = ({
 	currentIndex,
 	zoomScale,
 	pan,
+	zoomAnimated,
 	minZoom,
 	maxZoom,
 	carouselRef,
@@ -91,6 +93,8 @@ export const PhotoViewStage = ({
 											transform: isCurrent
 												? `translate(${pan.x}px, ${pan.y}px) scale(${slideZoom})`
 												: `scale(${slideZoom})`,
+															transition:
+																isCurrent && zoomAnimated ? "transform 0.3s ease-in-out" : "none",
 											touchAction: isCurrent && zoomScale > minZoom ? "none" : "pan-x pan-y",
 										}}
 										loading="eager"

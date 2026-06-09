@@ -1,16 +1,16 @@
 import {
-	IonPage,
-	useIonRouter,
+    IonPage,
+    useIonRouter,
 } from "@ionic/react";
 import {
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-	type MouseEvent,
-	type SyntheticEvent,
-	type TouchEvent,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type MouseEvent,
+    type SyntheticEvent,
+    type TouchEvent,
 } from "react";
 import { useParams } from "react-router-dom";
 import { useAppModal } from "../components/appModalContext";
@@ -26,7 +26,7 @@ export const PhotoViewPage = () => {
 	const MIN_ZOOM = 1;
 	const MAX_ZOOM = 4;
 	const ZOOM_STEP = 0.5;
-	const DOUBLE_TAP_ZOOM = 2;
+	const DOUBLE_TAP_FALLBACK_ZOOM = 2;
 	const DOUBLE_TAP_MS = 280;
 
 	const { albumId, photoId } = useParams<{ albumId: string; photoId: string }>();
@@ -35,6 +35,7 @@ export const PhotoViewPage = () => {
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [zoomScale, setZoomScale] = useState(MIN_ZOOM);
 	const [pan, setPan] = useState({ x: 0, y: 0 });
+	const [zoomAnimated, setZoomAnimated] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const carouselRef = useRef<HTMLDivElement | null>(null);
 	const pinchRef = useRef<{ active: boolean; startDistance: number; startScale: number }>({
@@ -210,6 +211,18 @@ export const PhotoViewPage = () => {
 		[clampPan, getCurrentImageMetrics, MIN_ZOOM, pan, zoomScale]
 	);
 
+	const getDoubleTapZoomScale = useCallback(() => {
+		const metrics = getCurrentImageMetrics();
+		if (!metrics) {
+			return clampZoom(DOUBLE_TAP_FALLBACK_ZOOM);
+		}
+
+		const widthScale = metrics.containerWidth / Math.max(metrics.baseWidth, 1);
+		const heightScale = metrics.containerHeight / Math.max(metrics.baseHeight, 1);
+		const coverScale = Math.max(widthScale, heightScale);
+		return clampZoom(coverScale);
+	}, [clampZoom, getCurrentImageMetrics]);
+
 	const touchDistance = (touches: TouchEvent<HTMLImageElement>["touches"]) => {
 		if (touches.length < 2) {
 			return 0;
@@ -331,12 +344,14 @@ export const PhotoViewPage = () => {
 			setCurrentIndex(0);
 			setZoomScale(MIN_ZOOM);
 			setPan({ x: 0, y: 0 });
+			setZoomAnimated(false);
 			return;
 		}
 
 		setCurrentIndex((current) => Math.min(current, displayImages.length - 1));
 		setZoomScale(MIN_ZOOM);
 		setPan({ x: 0, y: 0 });
+		setZoomAnimated(false);
 		carouselRef.current.scrollTo({ left: 0, top: 0 });
 	}, [displayImages.length, MIN_ZOOM]);
 	/* eslint-enable react-hooks/set-state-in-effect */
@@ -357,10 +372,12 @@ export const PhotoViewPage = () => {
 			setCurrentIndex(nextIndex);
 			setZoomScale(MIN_ZOOM);
 			setPan({ x: 0, y: 0 });
+			setZoomAnimated(false);
 		}
 	};
 
 	const onZoomIn = () => {
+		setZoomAnimated(true);
 		setZoomScale((current) => {
 			const next = clampZoom(current + ZOOM_STEP);
 			setPan((prev) => (next <= MIN_ZOOM ? { x: 0, y: 0 } : clampPan(prev, next)));
@@ -369,6 +386,7 @@ export const PhotoViewPage = () => {
 	};
 
 	const onZoomOut = () => {
+		setZoomAnimated(true);
 		setZoomScale((current) => {
 			const next = clampZoom(current - ZOOM_STEP);
 			setPan((prev) => (next <= MIN_ZOOM ? { x: 0, y: 0 } : clampPan(prev, next)));
@@ -377,24 +395,27 @@ export const PhotoViewPage = () => {
 	};
 
 	const onZoomReset = () => {
+		setZoomAnimated(true);
 		setZoomScale(MIN_ZOOM);
 		setPan({ x: 0, y: 0 });
 	};
 
 	const onZoomToggle = (point?: { x: number; y: number }) => {
+		setZoomAnimated(true);
 		setZoomScale((current) => {
 			if (current > MIN_ZOOM) {
 				setPan({ x: 0, y: 0 });
 				return MIN_ZOOM;
 			}
 
-			const next = clampZoom(DOUBLE_TAP_ZOOM);
+			const next = getDoubleTapZoomScale();
 			setPan(point ? getZoomPanForPoint(point, next) : clampPan(pan, next));
 			return next;
 		});
 	};
 
 	const onImageTouchStart = (event: TouchEvent<HTMLImageElement>) => {
+		setZoomAnimated(false);
 		if (event.touches.length >= 2) {
 			const distance = touchDistance(event.touches);
 			if (distance <= 0) {
@@ -528,6 +549,7 @@ export const PhotoViewPage = () => {
 				currentIndex={currentIndex}
 				zoomScale={zoomScale}
 				pan={pan}
+				zoomAnimated={zoomAnimated}
 				minZoom={MIN_ZOOM}
 				maxZoom={MAX_ZOOM}
 				carouselRef={carouselRef}
