@@ -64,7 +64,6 @@ export const PhotoViewPage = () => {
 	const modal = useAppModal();
 	const { savePhotoMemo, addImageToPhotoFromFile, deletePhotoImage } = useAlbumMutations();
 	const {
-		album,
 		photo,
 		images,
 		loading,
