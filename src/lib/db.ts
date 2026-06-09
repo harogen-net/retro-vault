@@ -6,6 +6,10 @@ import { resizeImageToJpeg } from "./image";
 const ALBUM_STORE = "albums";
 const PHOTO_STORE = "photos";
 const PHOTO_IMAGE_STORE = "photo_images";
+const ARCHIVE_KIND = "retro-vault-album";
+const CURRENT_ARCHIVE_FORMAT_VERSION = 1;
+const MIN_SUPPORTED_ARCHIVE_FORMAT_VERSION = 1;
+const MAX_SUPPORTED_ARCHIVE_FORMAT_VERSION = 1;
 
 type StoredPhoto = {
 	id: string;
@@ -40,8 +44,8 @@ type PhotoImageArchiveRecord = Omit<PhotoImage, "blob" | "thumbnailBlob"> & {
 };
 
 type AlbumArchiveMeta = {
-	formatVersion: 1;
-	kind: "retro-vault-album";
+	formatVersion: number;
+	kind: typeof ARCHIVE_KIND;
 	exportedAt: number;
 	sourceAlbumId: string;
 };
@@ -55,6 +59,171 @@ type AlbumArchiveData = {
 type AlbumArchive = {
 	meta: AlbumArchiveMeta;
 	data: AlbumArchiveData;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+	return typeof value === "object" && value !== null;
+};
+
+const isFiniteNumber = (value: unknown): value is number => {
+	return typeof value === "number" && Number.isFinite(value);
+};
+
+const isString = (value: unknown): value is string => {
+	return typeof value === "string";
+};
+
+const isOptionalString = (value: unknown): value is string | undefined => {
+	return value === undefined || typeof value === "string";
+};
+
+const assertArchive = (value: unknown): AlbumArchive => {
+	if (!isRecord(value)) {
+		throw new Error("インポートデータが不正です。");
+	}
+
+	const meta = value.meta;
+	const data = value.data;
+	if (!isRecord(meta) || !isRecord(data)) {
+		throw new Error("インポートデータが不正です。");
+	}
+
+	if (!isFiniteNumber(meta.formatVersion) || !Number.isInteger(meta.formatVersion)) {
+		throw new Error("インポート形式バージョンが不正です。");
+	}
+
+	if (meta.kind !== ARCHIVE_KIND) {
+		throw new Error("サポートされていないインポート形式です。");
+	}
+
+	if (meta.formatVersion > MAX_SUPPORTED_ARCHIVE_FORMAT_VERSION) {
+		throw new Error("このアプリより新しいインポート形式です。アプリを更新してください。");
+	}
+
+	if (meta.formatVersion < MIN_SUPPORTED_ARCHIVE_FORMAT_VERSION) {
+		throw new Error("古いインポート形式はサポートされていません。");
+	}
+
+	if (!isFiniteNumber(meta.exportedAt) || !isString(meta.sourceAlbumId)) {
+		throw new Error("インポートメタ情報が不正です。");
+	}
+
+	const album = data.album;
+	const photos = data.photos;
+	const images = data.images;
+	if (!isRecord(album) || !Array.isArray(photos) || !Array.isArray(images)) {
+		throw new Error("インポートデータが不正です。");
+	}
+
+	if (
+		!isString(album.id) ||
+		!isString(album.title) ||
+		!isFiniteNumber(album.createdAt) ||
+		!isFiniteNumber(album.updatedAt) ||
+		!isFiniteNumber(album.photoCount)
+	) {
+		throw new Error("アルバムデータが不正です。");
+	}
+
+	const photoIds = new Set<string>();
+	for (const photo of photos) {
+		if (!isRecord(photo)) {
+			throw new Error("写真データが不正です。");
+		}
+
+		if (
+			!isString(photo.id) ||
+			!isString(photo.albumId) ||
+			!isFiniteNumber(photo.createdAt) ||
+			!isFiniteNumber(photo.updatedAt) ||
+			!isFiniteNumber(photo.imageCount) ||
+			!isOptionalString(photo.coverImageId) ||
+			!isOptionalString(photo.memo)
+		) {
+			throw new Error("写真データが不正です。");
+		}
+
+		if (photoIds.has(photo.id)) {
+			throw new Error("写真IDが重複しています。");
+		}
+		photoIds.add(photo.id);
+	}
+
+	const imageIds = new Set<string>();
+	for (const image of images) {
+		if (!isRecord(image) || !isRecord(image.blob)) {
+			throw new Error("画像データが不正です。");
+		}
+
+		if (
+			!isString(image.id) ||
+			!isString(image.photoId) ||
+			!isFiniteNumber(image.createdAt) ||
+			!isFiniteNumber(image.width) ||
+			!isFiniteNumber(image.height) ||
+			!isFiniteNumber(image.sizeBytes) ||
+			!isString(image.mimeType) ||
+			!isString(image.blob.mimeType) ||
+			!isString(image.blob.dataBase64)
+		) {
+			throw new Error("画像データが不正です。");
+		}
+
+		if (imageIds.has(image.id)) {
+			throw new Error("画像IDが重複しています。");
+		}
+		imageIds.add(image.id);
+
+		if (!photoIds.has(image.photoId)) {
+			throw new Error("画像が存在しない写真を参照しています。");
+		}
+	}
+
+	for (const photo of photos) {
+		if (photo.coverImageId && !imageIds.has(photo.coverImageId)) {
+			throw new Error("写真のカバー画像参照が不正です。");
+		}
+	}
+
+	return {
+		meta: {
+			formatVersion: CURRENT_ARCHIVE_FORMAT_VERSION,
+			kind: ARCHIVE_KIND,
+			exportedAt: meta.exportedAt,
+			sourceAlbumId: meta.sourceAlbumId,
+		},
+		data: {
+			album: {
+				id: album.id,
+				title: album.title,
+				createdAt: album.createdAt,
+				updatedAt: album.updatedAt,
+				photoCount: album.photoCount,
+			},
+			photos: photos.map((photo) => ({
+				id: photo.id,
+				albumId: photo.albumId,
+				createdAt: photo.createdAt,
+				updatedAt: photo.updatedAt,
+				imageCount: photo.imageCount,
+				coverImageId: photo.coverImageId,
+				memo: photo.memo,
+			})),
+			images: images.map((image) => ({
+				id: image.id,
+				photoId: image.photoId,
+				createdAt: image.createdAt,
+				width: image.width,
+				height: image.height,
+				sizeBytes: image.sizeBytes,
+				mimeType: image.mimeType,
+				blob: {
+					mimeType: image.blob.mimeType,
+					dataBase64: image.blob.dataBase64,
+				},
+			})),
+		},
+	};
 };
 
 let dbPromise: Promise<IDBDatabase> | undefined;
@@ -442,12 +611,14 @@ export const exportAlbumToZip = async (albumId: string): Promise<Blob> => {
 		for (const imageKey of imageKeys) {
 			const image = (await toPromise(imageStore.get(imageKey))) as PhotoImage | undefined;
 			if (!image) {
-				continue;
+				tx.abort();
+				throw new Error("エクスポート対象の画像データが欠損しています。");
 			}
 
 			const blob = await blobToPayload(image.blob);
 			if (!blob) {
-				continue;
+				tx.abort();
+				throw new Error("エクスポート対象の画像Blobが不正です。");
 			}
 
 			imageRecords.push({
@@ -461,14 +632,21 @@ export const exportAlbumToZip = async (albumId: string): Promise<Blob> => {
 				blob,
 			});
 		}
+
+		const expectedImageCount = Math.max(1, photo.imageCount || 1);
+		const exportedImageCount = imageRecords.filter((record) => record.photoId === photo.id).length;
+		if (exportedImageCount !== expectedImageCount) {
+			tx.abort();
+			throw new Error("エクスポート対象の画像数が不整合です。");
+		}
 	}
 
 	await completeTx(tx);
 
 	const archive: AlbumArchive = {
 		meta: {
-			formatVersion: 1,
-			kind: "retro-vault-album",
+			formatVersion: CURRENT_ARCHIVE_FORMAT_VERSION,
+			kind: ARCHIVE_KIND,
 			exportedAt: Date.now(),
 			sourceAlbumId: album.id,
 		},
@@ -490,16 +668,20 @@ export const exportAlbumToZip = async (albumId: string): Promise<Blob> => {
 
 export const importAlbumFromZip = async (file: Blob): Promise<Album> => {
 	const zip = await JSZip.loadAsync(file);
-	const archiveFile = zip.file("album.json") ?? Object.values(zip.files).find((entry) => !entry.dir && entry.name.endsWith(".json"));
+	const archiveFile = zip.file("album.json");
 	if (!archiveFile) {
 		throw new Error("ZIP内に album.json が見つかりません。");
 	}
 
 	const content = await archiveFile.async("string");
-	const parsed = JSON.parse(content) as Partial<AlbumArchive>;
-	if (!parsed.meta || !parsed.data || parsed.meta.formatVersion !== 1 || parsed.meta.kind !== "retro-vault-album") {
-		throw new Error("サポートされていないインポート形式です。");
+	let parsedRaw: unknown;
+	try {
+		parsedRaw = JSON.parse(content);
+	} catch {
+		throw new Error("インポートJSONの解析に失敗しました。");
 	}
+
+	const parsed = assertArchive(parsedRaw);
 
 	const sourceAlbum = parsed.data.album;
 	const sourcePhotos = parsed.data.photos ?? [];
@@ -510,12 +692,8 @@ export const importAlbumFromZip = async (file: Blob): Promise<Album> => {
 
 	const newAlbumId = newId();
 	const photoIdMap = new Map<string, string>();
-	const imageIdMap = new Map<string, string>();
 	for (const sourcePhoto of sourcePhotos) {
 		photoIdMap.set(sourcePhoto.id, newId());
-	}
-	for (const sourceImage of sourceImages) {
-		imageIdMap.set(sourceImage.id, newId());
 	}
 
 	const imagesByPhoto = new Map<string, PhotoImageArchiveRecord[]>();
@@ -526,36 +704,6 @@ export const importAlbumFromZip = async (file: Blob): Promise<Album> => {
 	}
 
 	const importedAt = Date.now();
-
-	const preparedImages = await Promise.all(
-		sourceImages.map(async (sourceImage) => {
-			const blob = base64ToBlob(sourceImage.blob);
-			const thumbnailPrepared = await resizeImageToJpeg(
-				blob,
-				THUMBNAIL_MAX_EDGE,
-				JPEG_QUALITY
-			);
-
-			return {
-				sourceId: sourceImage.id,
-				sourcePhotoId: sourceImage.photoId,
-				createdAt: sourceImage.createdAt,
-				width: sourceImage.width,
-				height: sourceImage.height,
-				sizeBytes: sourceImage.sizeBytes,
-				mimeType: sourceImage.mimeType,
-				blob,
-				thumbnailBlob: thumbnailPrepared.blob,
-			};
-		})
-	);
-
-	const preparedImagesByPhoto = new Map<string, typeof preparedImages>();
-	for (const image of preparedImages) {
-		const list = preparedImagesByPhoto.get(image.sourcePhotoId) ?? [];
-		list.push(image);
-		preparedImagesByPhoto.set(image.sourcePhotoId, list);
-	}
 
 	const existingSourceAlbum = await getAlbum(parsed.meta.sourceAlbumId);
 	let importedTitle = sourceAlbum.title;
@@ -568,10 +716,6 @@ export const importAlbumFromZip = async (file: Blob): Promise<Album> => {
 	}
 
 	const db = await getDb();
-	const tx = db.transaction([ALBUM_STORE, PHOTO_STORE, PHOTO_IMAGE_STORE], "readwrite");
-	const albumStore = tx.objectStore(ALBUM_STORE);
-	const photoStore = tx.objectStore(PHOTO_STORE);
-	const imageStore = tx.objectStore(PHOTO_IMAGE_STORE);
 
 	const importedAlbum: Album = {
 		id: newAlbumId,
@@ -581,12 +725,13 @@ export const importAlbumFromZip = async (file: Blob): Promise<Album> => {
 		photoCount: 0,
 	};
 
+	const createAlbumTx = db.transaction(ALBUM_STORE, "readwrite");
+	createAlbumTx.objectStore(ALBUM_STORE).add(importedAlbum);
+	await completeTx(createAlbumTx);
+
 	let importedPhotoCount = 0;
 	for (const sourcePhoto of sourcePhotos) {
 		const relatedImages = (imagesByPhoto.get(sourcePhoto.id) ?? []).sort((a, b) => b.createdAt - a.createdAt);
-		const relatedPreparedImages = (preparedImagesByPhoto.get(sourcePhoto.id) ?? []).sort(
-			(a, b) => b.createdAt - a.createdAt
-		);
 		if (relatedImages.length === 0) {
 			continue;
 		}
@@ -596,30 +741,20 @@ export const importAlbumFromZip = async (file: Blob): Promise<Album> => {
 			continue;
 		}
 
-		const newCoverImageId = imageIdMap.get(sourcePhoto.coverImageId ?? relatedImages[0].id);
-		const storedPhoto: StoredPhoto = {
-			id: newPhotoId,
-			albumId: newAlbumId,
-			createdAt: sourcePhoto.createdAt,
-			updatedAt: sourcePhoto.updatedAt,
-			imageCount: relatedImages.length,
-			coverImageId: newCoverImageId,
-			memo: sourcePhoto.memo,
-		};
-		photoStore.add(storedPhoto);
+		const preferredCoverSourceId = sourcePhoto.coverImageId ?? relatedImages[0].id;
+		const preparedImages: PhotoImage[] = [];
+		let newCoverImageId: string | undefined;
 
 		for (const sourceImage of relatedImages) {
-			const newImageId = imageIdMap.get(sourceImage.id);
-			if (!newImageId) {
-				continue;
-			}
+			const newImageId = newId();
+			const blob = base64ToBlob(sourceImage.blob);
+			const thumbnailPrepared = await resizeImageToJpeg(
+				blob,
+				THUMBNAIL_MAX_EDGE,
+				JPEG_QUALITY
+			);
 
-			const preparedImage = relatedPreparedImages.find((item) => item.sourceId === sourceImage.id);
-			if (!preparedImage) {
-				continue;
-			}
-
-			const image: PhotoImage = {
+			preparedImages.push({
 				id: newImageId,
 				photoId: newPhotoId,
 				createdAt: sourceImage.createdAt,
@@ -627,29 +762,75 @@ export const importAlbumFromZip = async (file: Blob): Promise<Album> => {
 				height: sourceImage.height,
 				sizeBytes: sourceImage.sizeBytes,
 				mimeType: sourceImage.mimeType,
-				blob: preparedImage.blob,
-				thumbnailBlob: preparedImage.thumbnailBlob,
-			};
+				blob,
+				thumbnailBlob: thumbnailPrepared.blob,
+			});
+
+			if (sourceImage.id === preferredCoverSourceId) {
+				newCoverImageId = newImageId;
+			}
+		}
+
+		if (preparedImages.length === 0) {
+			continue;
+		}
+
+		if (!newCoverImageId) {
+			newCoverImageId = preparedImages[0].id;
+		}
+
+		const storedPhoto: StoredPhoto = {
+			id: newPhotoId,
+			albumId: newAlbumId,
+			createdAt: sourcePhoto.createdAt,
+			updatedAt: sourcePhoto.updatedAt,
+			imageCount: preparedImages.length,
+			coverImageId: newCoverImageId,
+			memo: sourcePhoto.memo,
+		};
+
+		const writeTx = db.transaction([ALBUM_STORE, PHOTO_STORE, PHOTO_IMAGE_STORE], "readwrite");
+		const albumStore = writeTx.objectStore(ALBUM_STORE);
+		const photoStore = writeTx.objectStore(PHOTO_STORE);
+		const imageStore = writeTx.objectStore(PHOTO_IMAGE_STORE);
+		const album = (await toPromise(albumStore.get(newAlbumId))) as Album | undefined;
+		if (!album) {
+			writeTx.abort();
+			throw new Error("インポート先アルバムの作成に失敗しました。");
+		}
+
+		photoStore.add(storedPhoto);
+		for (const image of preparedImages) {
 			imageStore.add(image);
 		}
+
+		albumStore.put({
+			...album,
+			photoCount: album.photoCount + 1,
+			updatedAt: importedAt,
+		});
+
+		await completeTx(writeTx);
 
 		importedPhotoCount += 1;
 	}
 
 	if (importedPhotoCount === 0) {
-		tx.abort();
+		const cleanupTx = db.transaction([ALBUM_STORE], "readwrite");
+		cleanupTx.objectStore(ALBUM_STORE).delete(newAlbumId);
+		await completeTx(cleanupTx);
 		throw new Error("インポート可能な画像データがありませんでした。");
 	}
 
-	albumStore.add({
-		...importedAlbum,
-		photoCount: importedPhotoCount,
-	});
+	const refreshTx = db.transaction(ALBUM_STORE, "readonly");
+	const savedAlbum = (await toPromise(refreshTx.objectStore(ALBUM_STORE).get(newAlbumId))) as Album | undefined;
+	await completeTx(refreshTx);
+	if (!savedAlbum) {
+		throw new Error("インポート完了後のアルバム取得に失敗しました。");
+	}
 
-	await completeTx(tx);
 	return {
-		...importedAlbum,
-		photoCount: importedPhotoCount,
+		...savedAlbum,
 	};
 };
 
